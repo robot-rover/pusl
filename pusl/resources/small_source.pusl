@@ -1,0 +1,12 @@
+for apple in basket:
+ print("What")
+
+let a = !(a + b) ?: 45 + 4.5 / 2
+let whomst = 10
+
+if houston() == true:
+ print()
+else if a + b > 10:
+ panic()
+else:
+ let whomst = "Heyo!"
