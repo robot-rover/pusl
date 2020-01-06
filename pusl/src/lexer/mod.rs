@@ -8,7 +8,7 @@ use crate::lexer::token::BlockType::*;
 use crate::lexer::token::LexUnit::Statement;
 use crate::lexer::token::Literal::{Boolean, Float, Integer};
 use crate::lexer::token::Symbol::*;
-use crate::lexer::token::{Block, BlockType, LexUnit, Literal, Symbol, Token};
+use crate::lexer::token::{Block, BlockType, LexUnit, Literal, Symbol, Token, Keyword};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -171,16 +171,17 @@ fn lex_line(line: &str) -> (Vec<Token>, usize) {
         if c.is_ascii_alphabetic() {
             let ident = read_identifier(&mut cursor);
             let token = match ident.as_str() {
-                "for" => Some(Token::Block(For)),
-                "if" => Some(Token::Block(If)),
-                "else" => Some(Token::Block(Else)),
-                "in" => Some(Token::Symbol(In)),
-                "while" => Some(Token::Block(While)),
-                "compare" => Some(Token::Block(Cmp)),
-                "to" => Some(Token::Symbol(To)),
-                "true" => Some(Token::Literal(Boolean(true))),
-                "false" => Some(Token::Literal(Boolean(false))),
-                "let" => Some(Token::Let),
+                "for" => Some(Token::Block(BlockType::For)),
+                "if" => Some(Token::Block(BlockType::If)),
+                "else" => Some(Token::Block(BlockType::Else)),
+                "in" => Some(Token::Keyword(Keyword::In)),
+                "while" => Some(Token::Block(BlockType::While)),
+                "compare" => Some(Token::Block(BlockType::Cmp)),
+                "to" => Some(Token::Keyword(Keyword::To)),
+                "true" => Some(Token::Literal(Literal::Boolean(true))),
+                "false" => Some(Token::Literal(Literal::Boolean(false))),
+                "let" => Some(Token::Keyword(Keyword::Let)),
+                "self" => Some(Token::Keyword(Keyword::This)),
                 _ => None,
             }
             .unwrap_or_else(|| Token::Reference(ident));
@@ -193,7 +194,6 @@ fn lex_line(line: &str) -> (Vec<Token>, usize) {
             ))));
         } else if c == ' ' {
             peek_while(&mut cursor, |&c| c == ' ').count();
-            tokens.push(Token::WhiteSpace);
         } else {
             tokens.push(Token::Symbol(read_symbol(&mut cursor)));
         }

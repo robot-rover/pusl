@@ -4,6 +4,7 @@ use generational_arena::Index;
 
 /// Syntax Blocks which are linear
 /// i.e. they will never branch
+#[derive(Debug)]
 pub enum Expression {
     Nullify {
         expr: ExpRef
@@ -33,7 +34,7 @@ pub enum Expression {
 
     FieldAccess {
         target: ExpRef,
-        name: String,
+        name: ExpRef,
     },
 
     Addition {
@@ -106,7 +107,7 @@ bitflags! {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Compare {
     Less,
     LessEqual,

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::{write, Debug, Formatter};
+use bitflags::_core::fmt::Error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
@@ -7,6 +8,7 @@ pub enum Literal {
     Integer(i64),
     Float(f64),
     String(String),
+    Null
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
@@ -34,8 +36,6 @@ pub enum Symbol {
     Less,
     GreaterEquals,
     LessEquals,
-    In,
-    To,
     Or,
     And
 }
@@ -53,6 +53,12 @@ pub enum BlockType {
 pub enum LexUnit {
     Statement(Vec<Token>),
     Block(Block),
+}
+
+impl Debug for LexUnit {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.fmt_indent(f, 0)
+    }
 }
 
 pub struct Block {
@@ -109,12 +115,19 @@ impl Debug for Block {
     }
 }
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Keyword {
+    Let,
+    In,
+    To,
+    This
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Token {
     Literal(Literal),
     Block(BlockType),
     Reference(String),
     Symbol(Symbol),
-    Let,
-    WhiteSpace,
+    Keyword(Keyword),
 }

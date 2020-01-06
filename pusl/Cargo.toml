@@ -8,3 +8,4 @@ edition = "2018"
 garbage = { path = "../garbage", version = "0.1.0"}
 generational-arena = "0.2.6"
 bitflags = "1.2.1"
+lazy_static = "1.4.0"
