@@ -123,7 +123,7 @@ where
 }
 
 fn read_identifier(line: &mut Source) -> String {
-    peek_while(line, |&c| c.is_ascii_alphanumeric() || c == '_').collect::<String>()
+    peek_while(line, |&c| c.is_ascii_alphanumeric() || c == '_' || c == '@').collect::<String>()
 }
 
 // TODO: Hex Literals
@@ -235,7 +235,7 @@ fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
         .collect();
     let mut tokens = Vec::new();
     while let Some(&c) = cursor.peek() {
-        if c.is_ascii_alphabetic() {
+        if c.is_ascii_alphabetic() || c == '@' {
             let ident = read_identifier(&mut cursor);
             let token = match ident.as_str() {
                 "for" => Some(Token::Block(BlockType::For)),

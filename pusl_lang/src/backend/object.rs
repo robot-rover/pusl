@@ -1,12 +1,15 @@
+use crate::backend::GcPoolRef;
+use crate::backend::RFunction;
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use garbage::{GcPointer, MarkTrace};
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Display;
-use crate::backend::RFunction;
+use typemap::TypeMap;
 
 pub type ObjectPtr = GcPointer<RefCell<Object>>;
+pub type NativeFn = fn(Vec<Value>, Option<Value>, GcPoolRef) -> Value;
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -16,9 +19,8 @@ pub enum Value {
     Float(f64),
     String(GcPointer<String>),
     Function(&'static RFunction),
-    Native(fn(Vec<Value>, Option<Value>) -> Value),
+    Native(NativeFn),
     Object(ObjectPtr),
-    List(GcPointer<RefCell<Vec<Value>>>)
 }
 
 impl Display for Value {
@@ -34,18 +36,6 @@ impl Display for Value {
             Value::Object(val) => {
                 write!(f, "Object ")?;
                 (*val).write_addr(f)?;
-            }
-            Value::List(val) => {
-                write!(f, "[")?;
-                let borrow = val.borrow();
-                let mut iter = borrow.iter().peekable();
-                while let Some(value) = iter.next() {
-                    write!(f, "{}", value)?;
-                    if iter.peek().is_some() {
-                        write!(f, ", ")?;
-                    }
-                }
-                write!(f, "]")?;
             }
         }
         Ok(())
@@ -63,7 +53,6 @@ impl Value {
             Value::Function(_) => "Function",
             Value::Object(_) => "Object",
             Value::Native(_) => "Native Function",
-            Value::List(_) => "List"
         }
     }
 }
@@ -72,7 +61,6 @@ impl MarkTrace for Value {
     fn mark_children(&self) {
         match self {
             Value::Object(object) => object.mark_recurse(),
-            Value::List(list) => list.mark_recurse(),
             _ => {}
         }
     }
@@ -92,10 +80,19 @@ impl MarkTrace for Object {
 }
 
 //Todo: The debug impl really should be custom
-#[derive(Debug)]
 pub struct Object {
     super_ptr: Option<ObjectPtr>,
     fields: HashMap<String, Value>,
+    pub native_data: TypeMap,
+}
+
+impl std::fmt::Debug for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Object")
+            .field("super_ptr", &self.super_ptr)
+            .field("fields", &self.fields)
+            .finish()
+    }
 }
 
 impl Object {
@@ -103,6 +100,7 @@ impl Object {
         let object = Object {
             super_ptr: None,
             fields: HashMap::new(),
+            native_data: TypeMap::new(),
         };
         RefCell::new(object)
     }
@@ -111,6 +109,7 @@ impl Object {
         let object = Object {
             super_ptr: Some(parent),
             fields: HashMap::new(),
+            native_data: TypeMap::new(),
         };
         RefCell::new(object)
     }
@@ -118,9 +117,7 @@ impl Object {
     pub fn get_field(this: ObjectPtr, name: &str) -> Value {
         let mut object_ptr = Some(this);
         while let Some(object) = object_ptr {
-            if let Some(value) = object.borrow().fields
-                .get(name)
-                .map(|val| (*val).clone()) {
+            if let Some(value) = object.borrow().fields.get(name).map(|val| (*val).clone()) {
                 return value;
             }
             object_ptr = object.borrow().super_ptr.clone();

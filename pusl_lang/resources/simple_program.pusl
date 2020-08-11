@@ -9,7 +9,7 @@ print(8+3, "\n", number2, "\n")
 
 let mt = []
 let mt = ["YAY"]
-print(mt[0])
+print(mt[0], "\n")
 let array = ["l33t", 433110, 1.25]
 print(array[0], " ", array[1], " ", array[2], "\n")
 

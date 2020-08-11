@@ -3,20 +3,21 @@ use std::thread::LocalKey;
 
 use garbage::{GcPointer, ManagedPool};
 
-use crate::backend::linearize::{Function, OpCode, ByteCodeFile, resolve, ByteCode, write_bytecode_line};
+use crate::backend::linearize::{resolve, ByteCodeFile, Function, OpCode};
 use crate::backend::object::{Object, ObjectPtr, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
-use std::path::PathBuf;
 use std::io;
-use std::convert::TryFrom;
+use std::path::PathBuf;
 
-use log::{error, warn, info, debug, trace};
-use std::sync::mpsc::{Sender, Receiver, RecvError};
+use log::trace;
+use std::sync::mpsc::{Receiver, Sender};
 
-pub mod linearize;
-pub mod object;
+pub mod builtins;
 pub mod debug;
+pub mod linearize;
+pub mod list;
+pub mod object;
 
 use debug::{DebugCommand, DebugResponse};
 
@@ -70,7 +71,7 @@ impl StackFrame {
             function,
             variables: vec![],
             op_stack: vec![],
-            index: 0
+            index: 0,
         };
         (frame, new_object)
     }
@@ -118,7 +119,11 @@ impl Default for ExecContext {
 }
 
 fn process_bcf(bcf: ByteCodeFile, resolved_imports: &mut Vec<(PathBuf, ObjectPtr)>) -> StackFrame {
-    let ByteCodeFile { file, base_func, imports } = bcf;
+    let ByteCodeFile {
+        file,
+        base_func,
+        imports,
+    } = bcf;
     let base_func = resolve(base_func, resolved_imports as &_, imports, &GC);
     let (current_frame, import_object) = StackFrame::from_file(base_func);
     resolved_imports.push((file, import_object));
@@ -130,22 +135,21 @@ const DEBUG: bool = true;
 type DebugTuple = (Receiver<DebugCommand>, Sender<DebugResponse>);
 
 pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTuple>) {
-    //let mut stdout_handle = std::io::stdout();
     let mut stop_index = None;
     if let Some(tuple) = &mut debug {
         tuple.1.send(DebugResponse::Paused(0)).unwrap();
         match tuple.0.recv().unwrap() {
             DebugCommand::RunToIndex(index) => stop_index = Some(index),
-            DebugCommand::Run => {},
+            DebugCommand::Run => {}
         }
     }
     if let Some(index) = stop_index {
         println!("running to index: {}", index);
     }
+
+    let builtins = builtins::get_builtins();
+
     let ExecContext { resolve } = ctx;
-    // if let Some(new_out) = stdout {
-    //     STDOUT.with(|stdout| *stdout.borrow_mut() = new_out);
-    // }
     let mut resolved_imports = Vec::<(PathBuf, ObjectPtr)>::new();
     let mut resolve_stack = vec![main];
     let mut index = 0;
@@ -154,7 +158,8 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
         let mut append = Vec::new();
         for import in &resolve_stack[index].imports {
             if !resolve_stack.iter().any(|bcf| bcf.file == import.path) {
-                let new_bcf = resolve(import.path.clone()).expect(format!("Unable to resolve import {}", import.path.display()).as_str());
+                let new_bcf = resolve(import.path.clone())
+                    .expect(format!("Unable to resolve import {}", import.path.display()).as_str());
                 append.push(new_bcf);
             }
         }
@@ -180,7 +185,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                             VariableStack::Variable(Variable { name, value }) => {
                                 println!("\t{}: {:?}", name, value)
                             }
-                            VariableStack::ScopeBoundary => println!("\t----")
+                            VariableStack::ScopeBoundary => println!("\t----"),
                         }
                     }
                     println!("Stack: ");
@@ -196,7 +201,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
         }
         let current_op = if let Some(op) = current_frame.get_code() {
-            trace!("{}: {:?}", current_frame.index - 1, op);
+            // trace!("{}: {:?}", current_frame.index - 1, op);
             op
         } else {
             if let Some(mut parent_frame) = ex_stack.pop() {
@@ -233,7 +238,10 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 )
             }
             OpCode::PushSelf => {
-                let self_ref = current_frame.this_obj.clone().expect("Cannot reference self");
+                let self_ref = current_frame
+                    .this_obj
+                    .clone()
+                    .expect("Cannot reference self");
                 current_frame.op_stack.push(Value::Object(self_ref));
             }
             OpCode::PushReference => {
@@ -253,38 +261,17 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .find(|var| var.name == reference_name)
                     .map(|var| var.value.clone())
                     .or_else(|| {
-                        current_frame.function.resolved.iter().find(|&(name, _)| name.as_str() == reference_name).map(|(_, obj)| Value::Object(obj.clone()))
+                        current_frame
+                            .function
+                            .resolved
+                            .iter()
+                            .find(|&(name, _)| name.as_str() == reference_name)
+                            .map(|(_, obj)| Value::Object(obj.clone()))
                     })
                     .or_else(|| {
-                        if reference_name.as_str() == "typeof" {
-                            Some(Value::Native(type_of))
-                        } else {
-                            None
-                        }
-                    })
-                    .or_else(|| {
-                        if reference_name.as_str() == "print" {
-                            Some(Value::Native(print))
-                        } else {
-                            None
-                        }
-                    })
-                    .or_else(|| {
-                        if reference_name.as_str() == "Object" {
-                            Some(Value::Native(new_object))
-                        } else {
-                            None
-                        }
-                    })
-                    .or_else(|| {
-                        if reference_name.as_str() == "native" {
-                            Some(Value::Native(native_import))
-                        } else {
-                            None
-                        }
+                        builtins.get(reference_name.as_str()).cloned()
                     })
                     .expect(format!("Undeclared Variable \"{}\"", reference_name).as_str());
-                println!("Pushing Reference: {:?}", &value);
                 current_frame.op_stack.push(value);
             }
             OpCode::PushFunction => {
@@ -315,7 +302,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         ex_stack.push(old_frame);
                     }
                     Value::Native(ptr) => {
-                        let result = ptr(args, None);
+                        let result = ptr(args, None, &GC);
                         current_frame.op_stack.push(result);
                     }
                     _ => panic!("Value must be a function to call"),
@@ -349,7 +336,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         ex_stack.push(old_frame);
                     }
                     Value::Native(ptr) => {
-                        let result = ptr(args, Some(value));
+                        let result = ptr(args, Some(value), &GC);
                         current_frame.op_stack.push(result);
                     }
                     _ => panic!("Value must be a function to call"),
@@ -360,23 +347,11 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let name_index = current_frame.get_val();
                 let name = current_frame.function.get_reference(name_index);
                 let value = match value {
-                    Value::Object(object) => {
-                        Object::get_field(object, name.as_str())
-                    }
-                    Value::List(list) => {
-                        match name.as_str() {
-                            "push" => Value::Native(list_push),
-                            _ => panic!("Array doesn't have a field with that name")
-                        }
-                    }
-                    Value::String(string) => {
-                        unimplemented!()
-                    }
-                    _ => panic!("Cannot access field of this value")
+                    Value::Object(object) => Object::get_field(object, name.as_str()),
+                    Value::String(string) => unimplemented!(),
+                    _ => panic!("Cannot access field of this value"),
                 };
-                current_frame
-                    .op_stack
-                    .push(value);
+                current_frame.op_stack.push(value);
             }
             OpCode::Addition => {
                 let rhs = current_frame.op_stack.pop().unwrap();
@@ -540,44 +515,23 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let n = current_frame.get_val();
                 let len = current_frame.op_stack.len();
                 assert!(n <= len);
-                let mut range = current_frame.op_stack[(len-n)..len].iter().map(|val| val.clone()).collect();
+                let mut range = current_frame.op_stack[(len - n)..len]
+                    .iter()
+                    .map(|val| val.clone())
+                    .collect();
                 current_frame.op_stack.append(&mut range);
             }
-            OpCode::ListAccess => {
-                println!("{:?}", &current_frame.variables);
-                println!("{:?}", &current_frame.op_stack);
-                let index = if let Some(Value::Integer(index)) = current_frame.op_stack.pop() {
-                    usize::try_from(index).expect("Array index greater than architecture max value")
-                } else {
-                    panic!("Cannot index array without integer")
-                };
-                let list_ptr = if let Some(Value::List(ptr)) = current_frame.op_stack.pop() {
-                    ptr
-                } else {
-                    panic!("Cannot index non-array type")
-                };
-                let value = list_ptr.borrow()[index].clone();
+            OpCode::PushBuiltin => {
+                let pool_index = current_frame.get_val();
+                let reference_name = current_frame.function.get_reference(pool_index);
+                let builtin = builtins.get(reference_name.as_str()).expect("Missing Builtin").clone();
+                current_frame.op_stack.push(builtin);
+            }
+            OpCode::DuplicateDeep => {
+                let dup_index = current_frame.get_val();
+                let stack_index = current_frame.op_stack.len() - 1 - dup_index;
+                let value = current_frame.op_stack.get(stack_index).expect("Invalid DuplicateDeep Index").clone();
                 current_frame.op_stack.push(value);
-            }
-            OpCode::AssignList => {
-                let value = current_frame.op_stack.pop().unwrap();
-                let index = if let Some(Value::Integer(index)) = current_frame.op_stack.pop() {
-                    usize::try_from(index).expect("Array index greater than architecture max value")
-                } else {
-                    panic!("Cannot index array without integer")
-                };
-                let list_ptr = if let Some(Value::List(ptr)) = current_frame.op_stack.pop() {
-                    ptr
-                } else {
-                    panic!("Cannot index non-array type")
-                };
-                list_ptr.borrow_mut()[index] = value;
-            }
-            OpCode::NewList => {
-                let ref_cell = RefCell::new(Vec::new());
-                let list_ptr = GC.with(|gc| gc.borrow_mut().place_in_heap(ref_cell));
-                let list = Value::List(list_ptr);
-                current_frame.op_stack.push(list);
             }
         }
     }
@@ -603,62 +557,6 @@ fn logic(lhs: Value, rhs: Value, is_and: bool) -> Value {
         }
         _ => panic!("Use Logical Operator with Boolean or Integer"),
     }
-}
-
-fn type_of(mut args: Vec<Value>, _: Option<Value>) -> Value {
-    if let Some(value) = args.pop() {
-        if !args.is_empty() {
-            panic!()
-        }
-        let type_string = value.type_string();
-        let gc_ptr = GC.with(|gc| gc.borrow_mut().place_in_heap(type_string.to_owned()));
-        Value::String(gc_ptr)
-    } else {
-        panic!()
-    }
-}
-
-fn native_import(mut args: Vec<Value>, _: Option<Value>) -> Value {
-    let import_name = args.pop().expect("native takes 1 argument");
-    assert!(args.is_empty());
-    unimplemented!();
-}
-
-fn list_push(mut args: Vec<Value>, this: Option<Value>) -> Value {
-    let value = args.pop().expect("must call push with 1 argument");
-    assert!(args.is_empty());
-    if let Some(Value::List(list)) = this {
-        list.borrow_mut().push(value);
-    } else {
-        panic!("can only call push on a list");
-    }
-    Value::Null
-}
-
-fn new_object(mut args: Vec<Value>, _: Option<Value>) -> Value {
-    if args.len() > 1 {
-        panic!()
-    }
-    let object = if let Some(super_obj) = args.pop() {
-        let super_obj = if let Value::Object(ptr) = super_obj {
-            ptr
-        } else {
-            panic!()
-        };
-        Object::new_with_parent(super_obj)
-    } else {
-        Object::new()
-    };
-    let gc_ptr = GC.with(|gc| gc.borrow_mut().place_in_heap(object));
-
-    Value::Object(gc_ptr)
-}
-
-fn print(args: Vec<Value>, _: Option<Value>) -> Value {
-    for value in args.into_iter().rev() {
-        print!("{}", value);
-    }
-    Value::Null
 }
 
 #[inline]
@@ -846,13 +744,6 @@ fn compare(lhs: Value, rhs: Value, compare: Compare) -> Value {
             }
             Value::Native(lhs) => {
                 if let Value::Native(rhs) = rhs {
-                    lhs == rhs
-                } else {
-                    false
-                }
-            }
-            Value::List(lhs) => {
-                if let Value::List(rhs) = rhs {
                     lhs == rhs
                 } else {
                     false

@@ -1,28 +1,28 @@
+use crate::backend::object::{Object, ObjectPtr};
+use crate::backend::RFunction;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
-use crate::parser::expression::{AssignmentFlags, AssignAccess};
+use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
+use garbage::ManagedPool;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{fmt, io};
+use std::cell::RefCell;
+use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
-use crate::backend::RFunction;
-use crate::backend::object::{ObjectPtr, Object};
-use garbage::ManagedPool;
-use std::cell::RefCell;
 use std::thread::LocalKey;
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
 pub enum OpCode {
-    Modulus,         // 2 Stack Values
-    Literal,         // 1 ByteCode Value (index of literal pool)
-    PushReference,   // 1 ByteCode Value (index of reference pool)
-    PushFunction,    //  1 ByteCode Value (index of sub-function pool)
+    Modulus,       // 2 Stack Values
+    Literal,       // 1 ByteCode Value (index of literal pool)
+    PushReference, // 1 ByteCode Value (index of reference pool)
+    PushFunction,  //  1 ByteCode Value (index of sub-function pool)
     PushSelf,
-    FunctionCall,    // n + 1 Stack Values (bottom is reference to function) (first opcode is n)
+    FunctionCall, // n + 1 Stack Values (bottom is reference to function) (first opcode is n)
     MethodCall, // n + 2 Stack Values (bottom is self, then function, then n arguments) first opcode is n
     FieldAccess, // 1 Stack value (object reference) and 1 ByteCode Value (index of reference pool)
     Addition,   // 2 Stack Values
@@ -47,9 +47,8 @@ pub enum OpCode {
     IsNull,         // Replaces Value with False, Null with True
     Duplicate,      // Copies the top of the stack
     DuplicateMany,  // Copies n values onto top of stack (n is opcode)
-    ListAccess,    // 2 Stack Values Bottom: ArrayReference, Top: ArrayIndex
-    AssignList,    // 3 Stack Values Bottom: ArrayReference, Array Index, Top: Value and 1 opcode (type)
-    NewList
+    PushBuiltin, // 1 ByteCode Value (index of reference pool)
+    DuplicateDeep, // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
 }
 
 #[derive(Copy, Clone)]
@@ -140,12 +139,24 @@ pub struct ByteCodeFile {
 impl Debug for ByteCodeFile {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         if !f.alternate() {
-            write!(f, "ByteCode: {}, Imports: {}, {:?}", self.file.display(), self.imports.len(), self.base_func)?;
+            write!(
+                f,
+                "ByteCode: {}, Imports: {}, {:?}",
+                self.file.display(),
+                self.imports.len(),
+                self.base_func
+            )?;
         } else {
             writeln!(f, "ByteCode: {}", self.file.display())?;
             writeln!(f, "Imports:")?;
             for (index, import) in self.imports.iter().enumerate() {
-                writeln!(f, "\t{:3}: {} as {}", index, import.path.display(), import.alias)?;
+                writeln!(
+                    f,
+                    "\t{:3}: {} as {}",
+                    index,
+                    import.path.display(),
+                    import.alias
+                )?;
             }
             write!(f, "{:#?}", self.base_func)?;
         }
@@ -161,17 +172,35 @@ pub struct Function<T> {
     pub(crate) code: Vec<ByteCode>,
     pub sub_functions: Vec<Function<T>>,
     #[serde(skip)]
-    pub resolved: T
+    pub resolved: T,
 }
 
-pub fn resolve<'a, I>(function: Function<()>, global_imports: I, target_imports: Vec<Import>, gc: &'static LocalKey<RefCell<ManagedPool>>) -> &'static RFunction
-    where I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>{
-    let Function { args, literals, references, code, sub_functions, .. } = function;
+pub fn resolve<'a, I>(
+    function: Function<()>,
+    global_imports: I,
+    target_imports: Vec<Import>,
+    gc: &'static LocalKey<RefCell<ManagedPool>>,
+) -> &'static RFunction
+where
+    I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
+{
+    let Function {
+        args,
+        literals,
+        references,
+        code,
+        sub_functions,
+        ..
+    } = function;
 
     let mut iter = global_imports.into_iter();
     let mut imports = Vec::new();
     for Import { path, alias } in target_imports {
-        let import_parent: ObjectPtr = iter.by_ref().find(|i| &i.0 == &path).map(|i| i.1.clone()).unwrap();
+        let import_parent: ObjectPtr = iter
+            .by_ref()
+            .find(|i| &i.0 == &path)
+            .map(|i| i.1.clone())
+            .unwrap();
         let import_object = Object::new_with_parent(import_parent);
         let import_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(import_object));
         imports.push((alias, import_ptr));
@@ -179,7 +208,10 @@ pub fn resolve<'a, I>(function: Function<()>, global_imports: I, target_imports:
 
     let imports: &Vec<_> = Box::leak(Box::new(imports));
 
-    let sub_functions = sub_functions.into_iter().map(|f| sub_resolve(f, imports)).collect();
+    let sub_functions = sub_functions
+        .into_iter()
+        .map(|f| sub_resolve(f, imports))
+        .collect();
 
     let result = RFunction {
         args,
@@ -187,21 +219,31 @@ pub fn resolve<'a, I>(function: Function<()>, global_imports: I, target_imports:
         references,
         code,
         sub_functions,
-        resolved: imports
+        resolved: imports,
     };
     Box::leak(Box::new(result))
 }
 
 fn sub_resolve(function: Function<()>, imports: &'static Vec<(String, ObjectPtr)>) -> RFunction {
-    let Function { args, literals, references, code, sub_functions, .. } = function;
-    let sub_functions = sub_functions.into_iter().map(|f| sub_resolve(f, imports)).collect();
+    let Function {
+        args,
+        literals,
+        references,
+        code,
+        sub_functions,
+        ..
+    } = function;
+    let sub_functions = sub_functions
+        .into_iter()
+        .map(|f| sub_resolve(f, imports))
+        .collect();
     RFunction {
         args,
         literals,
         references,
         code,
         sub_functions,
-        resolved: imports
+        resolved: imports,
     }
 }
 
@@ -256,7 +298,7 @@ pub fn write_bytecode_line<'a, T, F, W>(
 ) -> fmt::Result
 where
     T: Iterator<Item = (usize, &'a ByteCode)>,
-    W: fmt::Write
+    W: fmt::Write,
 {
     let (index, bytecode) = line;
     let op_code = bytecode.as_op();
@@ -280,12 +322,12 @@ where
             writeln!(f, "PushFunc {:?} | [{}]", pool_value, pool_index)?;
         }
         OpCode::FunctionCall => {
-            let pool_index = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "FnCall {}", pool_index)?;
+            let num_args = code_iter.next().unwrap().1.as_val();
+            writeln!(f, "FnCall {}", num_args)?;
         }
         OpCode::MethodCall => {
-            let pool_index = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "ObjCall {}", pool_index)?;
+            let num_args = code_iter.next().unwrap().1.as_val();
+            writeln!(f, "MethodCall {}", num_args)?;
         }
         OpCode::FieldAccess => {
             let pool_index = code_iter.next().unwrap().1.as_val();
@@ -353,15 +395,14 @@ where
             let n = code_iter.next().unwrap().1.as_val();
             writeln!(f, "DuplicateMany {}", n)?;
         }
-        OpCode::ListAccess => {
-            writeln!(f, "ListAccess")?;
+        OpCode::PushBuiltin => {
+            let pool_index = code_iter.next().unwrap().1.as_val();
+            let pool_value = &func.references[pool_index];
+            writeln!(f, "PushBuiltin \"{}\"[{}]", pool_value, pool_index)?;
         }
-        OpCode::AssignList => {
-            let is_let = unsafe { code_iter.next().unwrap().1.let_assign };
-            writeln!(f, "AssignList let:{}", is_let)?;
-        }
-        OpCode::NewList => {
-            writeln!(f, "NewList")?;
+        OpCode::DuplicateDeep => {
+            let dup_index = code_iter.next().unwrap().1.as_val();
+            writeln!(f, "DuplicateDeep {}", dup_index)?;
         }
     }
 
@@ -369,7 +410,6 @@ where
 }
 
 impl<T> Function<T> {
-
     pub fn get_code(&self, index: usize) -> Option<OpCode> {
         self.code.get(index).map(|b| b.as_op())
     }
@@ -465,7 +505,7 @@ impl<T> Function<T> {
             references: vec![],
             code: vec![],
             sub_functions: vec![],
-            resolved
+            resolved,
         }
     }
 }
@@ -473,7 +513,11 @@ impl<T> Function<T> {
 pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
     let ParsedFile { expr, imports } = file;
     let func = linearize(expr, vec![]);
-    ByteCodeFile { file: path, base_func: func, imports }
+    ByteCodeFile {
+        file: path,
+        base_func: func,
+        imports,
+    }
 }
 
 fn linearize(expr: ExpRef, args: Vec<String>) -> Function<()> {
@@ -607,7 +651,7 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             expression,
             flags,
         } => {
-            let skip_index_option = match target {
+            match target {
                 AssignAccess::Field { target, name } => {
                     linearize_exp_ref(target, func, true);
                     let target_index = func.add_reference(name);
@@ -624,8 +668,13 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
                     linearize_exp_ref(expression, func, true);
                     func.code.push(ByteCode::op(OpCode::AssignField));
                     func.code.push(ByteCode::val(target_index));
-                    skip_index
-                },
+                    func.code.push(ByteCode {
+                        let_assign: flags.intersects(AssignmentFlags::LET),
+                    });
+                    if let Some(jump_instruction) = skip_index {
+                        func.set_jump(jump_instruction, func.current_index());
+                    }
+                }
                 AssignAccess::Reference { name } => {
                     let target_index = func.add_reference(name);
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
@@ -640,34 +689,53 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
                     linearize_exp_ref(expression, func, true);
                     func.code.push(ByteCode::op(OpCode::AssignReference));
                     func.code.push(ByteCode::val(target_index));
-                    skip_index
-                },
+                    func.code.push(ByteCode {
+                        let_assign: flags.intersects(AssignmentFlags::LET),
+                    });
+                    if let Some(jump_instruction) = skip_index {
+                        func.set_jump(jump_instruction, func.current_index());
+                    }
+                }
                 AssignAccess::Array { target, index } => {
                     linearize_exp_ref(target, func, true);
                     linearize_exp_ref(index, func, true);
+
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.code.push(ByteCode::op(OpCode::DuplicateMany));
+                        func.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                        func.code.push(ByteCode::val(1));
+                        func.code.push(ByteCode::op(OpCode::Duplicate));
+                        func.code.push(ByteCode::op(OpCode::FieldAccess));
+                        let pool_index = func.add_reference(String::from("@index_get"));
+                        func.code.push(ByteCode::val(pool_index));
+                        func.code.push(ByteCode::op(OpCode::DuplicateDeep));
                         func.code.push(ByteCode::val(2));
-                        func.code.push(ByteCode::op(OpCode::ListAccess));
+                        func.code.push(ByteCode::op(OpCode::MethodCall));
+                        func.code.push(ByteCode::val(1));
                         func.code.push(ByteCode::op(OpCode::IsNull));
                         func.code.push(ByteCode::op(OpCode::Negate));
                         Some(func.place_jump(true))
                     } else {
                         None
                     };
+                    func.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.code.push(ByteCode::val(1));
+                    func.code.push(ByteCode::op(OpCode::FieldAccess));
+                    let pool_index = func.add_reference(String::from("@index_set"));
+                    func.code.push(ByteCode::val(pool_index));
+                    func.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.code.push(ByteCode::val(2));
                     linearize_exp_ref(expression, func, true);
-                    func.code.push(ByteCode::op(OpCode::AssignList));
-                    skip_index
-                },
+                    func.code.push(ByteCode::op(OpCode::MethodCall));
+                    func.code.push(ByteCode::val(2));
+                    if let Some(jump_instruction) = skip_index {
+                        func.set_jump(jump_instruction, func.current_index());
+                    }
+
+                    func.code.push(ByteCode::op(OpCode::Pop));
+                    func.code.push(ByteCode::op(OpCode::Pop));
+                }
             };
 
-
-            func.code.push(ByteCode {
-                let_assign: flags.intersects(AssignmentFlags::LET),
-            });
-            if let Some(jump_instruction) = skip_index_option {
-                func.set_jump(jump_instruction, func.current_index());
-            }
             false
         }
         Expression::DivideTruncate { lhs, rhs } => {
@@ -719,25 +787,25 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             false
         }
         Expression::ListDeclaration { values } => {
-            func.code.push(ByteCode::op(OpCode::NewList));
-            for value in values {
-                func.code.push(ByteCode::op(OpCode::Duplicate));
-                func.code.push(ByteCode::op(OpCode::Duplicate));
-                func.code.push(ByteCode::op(OpCode::FieldAccess));
-                let pool_index = func.add_reference(String::from("push"));
-                func.code.push(ByteCode::val(pool_index));
-                linearize_exp_ref(value, func, true);
-                func.code.push(ByteCode::op(OpCode::MethodCall));
-                func.code.push(ByteCode::val(1));
-                func.code.push(ByteCode::op(OpCode::Pop))
-
-            }
+            // TODO: Create List Object
+            func.code.push(ByteCode::op(OpCode::PushBuiltin));
+            let pool_index = func.add_reference(String::from("List"));
+            func.code.push(ByteCode::val(pool_index));
+            let num_values = values.len();
+            values.into_iter().for_each(|value| linearize_exp_ref(value, func, true));
+            func.code.push(ByteCode::op(OpCode::FunctionCall));
+            func.code.push(ByteCode::val(num_values));
             true
         }
         Expression::ListAccess { target, index } => {
             linearize_exp_ref(target, func, true);
+            func.code.push(ByteCode::op(OpCode::Duplicate));
+            func.code.push(ByteCode::op(OpCode::FieldAccess));
+            let pool_index = func.add_reference(String::from("@index_get"));
+            func.code.push(ByteCode::val(pool_index));
             linearize_exp_ref(index, func, true);
-            func.code.push(ByteCode::op(OpCode::ListAccess));
+            func.code.push(ByteCode::op(OpCode::MethodCall));
+            func.code.push(ByteCode::val(1));
             true
         }
     };
@@ -800,7 +868,11 @@ fn linearize_compare(
         .for_each(|(_, jump_out_index)| func.code[jump_out_index].value = jump_out_to as u64);
 }
 
-fn linearize_if_else(conditions: Vec<ConditionBody>, last: Option<ExpRef>, func: &mut Function<()>) {
+fn linearize_if_else(
+    conditions: Vec<ConditionBody>,
+    last: Option<ExpRef>,
+    func: &mut Function<()>,
+) {
     let place_conditions = conditions
         .into_iter()
         .map(|ConditionBody { condition, body }| {
