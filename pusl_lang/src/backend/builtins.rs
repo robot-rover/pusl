@@ -36,6 +36,7 @@ fn print(args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
 }
 
 fn native_import(mut args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
+    #[allow(unused_variables)]
     let import_name = args.pop().expect("native takes 1 argument");
     assert!(args.is_empty());
     unimplemented!();

@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use log::trace;
 use std::sync::mpsc::{Receiver, Sender};
 
+pub mod argparse;
 pub mod builtins;
 pub mod debug;
 pub mod linearize;
@@ -130,8 +131,6 @@ fn process_bcf(bcf: ByteCodeFile, resolved_imports: &mut Vec<(PathBuf, ObjectPtr
     current_frame
 }
 
-const DEBUG: bool = true;
-
 type DebugTuple = (Receiver<DebugCommand>, Sender<DebugResponse>);
 
 pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTuple>) {
@@ -192,7 +191,10 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     for value in &current_frame.op_stack {
                         println!("\t{:?}", value);
                     }
-                    tuple.1.send(DebugResponse::Paused(current_frame.index));
+                    tuple
+                        .1
+                        .send(DebugResponse::Paused(current_frame.index))
+                        .unwrap();
                     match tuple.0.recv().unwrap() {
                         DebugCommand::RunToIndex(index) => stop_index = Some(index),
                         DebugCommand::Run => stop_index = None,
@@ -201,7 +203,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
         }
         let current_op = if let Some(op) = current_frame.get_code() {
-            // trace!("{}: {:?}", current_frame.index - 1, op);
+            if debug.is_some() {
+                trace!("{}: {:?}", current_frame.index - 1, op);
+            }
             op
         } else {
             if let Some(mut parent_frame) = ex_stack.pop() {
@@ -268,9 +272,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                             .find(|&(name, _)| name.as_str() == reference_name)
                             .map(|(_, obj)| Value::Object(obj.clone()))
                     })
-                    .or_else(|| {
-                        builtins.get(reference_name.as_str()).cloned()
-                    })
+                    .or_else(|| builtins.get(reference_name.as_str()).cloned())
                     .expect(format!("Undeclared Variable \"{}\"", reference_name).as_str());
                 current_frame.op_stack.push(value);
             }
@@ -348,7 +350,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let name = current_frame.function.get_reference(name_index);
                 let value = match value {
                     Value::Object(object) => Object::get_field(object, name.as_str()),
-                    Value::String(string) => unimplemented!(),
+                    Value::String(_) => unimplemented!(),
                     _ => panic!("Cannot access field of this value"),
                 };
                 current_frame.op_stack.push(value);
@@ -524,13 +526,20 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             OpCode::PushBuiltin => {
                 let pool_index = current_frame.get_val();
                 let reference_name = current_frame.function.get_reference(pool_index);
-                let builtin = builtins.get(reference_name.as_str()).expect("Missing Builtin").clone();
+                let builtin = builtins
+                    .get(reference_name.as_str())
+                    .expect("Missing Builtin")
+                    .clone();
                 current_frame.op_stack.push(builtin);
             }
             OpCode::DuplicateDeep => {
                 let dup_index = current_frame.get_val();
                 let stack_index = current_frame.op_stack.len() - 1 - dup_index;
-                let value = current_frame.op_stack.get(stack_index).expect("Invalid DuplicateDeep Index").clone();
+                let value = current_frame
+                    .op_stack
+                    .get(stack_index)
+                    .expect("Invalid DuplicateDeep Index")
+                    .clone();
                 current_frame.op_stack.push(value);
             }
         }

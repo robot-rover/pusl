@@ -97,10 +97,6 @@ impl<T: MarkTrace> MarkTrace for Vec<T> {
     }
 }
 
-
-
-
-
 struct ManagedData<T: MarkTrace + ?Sized> {
     flag: Cell<bool>,
     data: T,

@@ -4,9 +4,9 @@
 
 use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Symbol, Token};
 use crate::parser::branch::{Branch, ConditionBody};
-use crate::parser::expression::{AssignmentFlags, AssignAccess};
 use crate::parser::expression::Compare;
 use crate::parser::expression::Expression;
+use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::InBetween::{Lexeme, Parsed};
 use std::iter::Peekable;
 use std::path::PathBuf;
@@ -25,13 +25,13 @@ pub enum Eval {
 
 pub struct ParsedFile {
     pub expr: ExpRef,
-    pub imports: Vec<Import>
+    pub imports: Vec<Import>,
 }
 
 #[derive(Debug)]
 pub struct Import {
     pub path: PathBuf,
-    pub alias: String
+    pub alias: String,
 }
 
 pub type ExpRef = Box<Eval>;
@@ -68,7 +68,9 @@ where
 }
 
 fn parse_import<I>(tokens: I) -> Import
-where I: IntoIterator<Item = Token> {
+where
+    I: IntoIterator<Item = Token>,
+{
     let mut iter = tokens.into_iter().peekable();
     assert_eq!(Some(Token::Keyword(Keyword::Import)), iter.next());
     let mut path = PathBuf::new();
@@ -76,11 +78,11 @@ where I: IntoIterator<Item = Token> {
         if let Token::Reference(name) = token {
             path.push(name);
             match iter.next() {
-                Some(Token::Symbol(Symbol::Period)) => {},
+                Some(Token::Symbol(Symbol::Period)) => {}
                 Some(Token::Keyword(Keyword::As)) => {
                     break;
                 }
-                _ => panic!()
+                _ => panic!(),
             }
         } else {
             panic!("Invalid Import")
@@ -97,7 +99,6 @@ where I: IntoIterator<Item = Token> {
 
     Import { path, alias }
 }
-
 
 fn parse_lex_unit<I>(unit: LexUnit, stream: &mut Peekable<I>) -> ExpRef
 where
@@ -343,7 +344,7 @@ fn parse_function_declaration(block: Block) -> Expression {
     Expression::Assigment {
         target,
         expression: decl_expr,
-        flags
+        flags,
     }
 }
 
@@ -360,9 +361,7 @@ where
     };
 
     let ident = if tokens.is_empty() {
-        AssignAccess::Reference {
-            name
-        }
+        AssignAccess::Reference { name }
     } else {
         let mut name_stack = Vec::new();
         let mut self_base = false;
@@ -372,8 +371,8 @@ where
                 Some(Token::Keyword(Keyword::This)) => {
                     self_base = true;
                     assert!(tokens.is_empty(), "self is not a valid field name")
-                },
-                _ => panic!("Invalid Identifier")
+                }
+                _ => panic!("Invalid Identifier"),
             }
         }
         let mut target = if self_base {
@@ -386,10 +385,7 @@ where
         while let Some(name) = name_stack.pop() {
             target = Box::new(Eval::Expression(Expression::FieldAccess { target, name }))
         }
-        AssignAccess::Field {
-            target,
-            name
-        }
+        AssignAccess::Field { target, name }
     };
     assert!(tokens.is_empty());
 
@@ -436,7 +432,7 @@ fn parse_statement(tokens: Vec<Token>) -> ExpRef {
         let expr = Expression::Assigment {
             target,
             expression,
-            flags
+            flags,
         };
         Box::new(Eval::Expression(expr))
     } else {
@@ -451,7 +447,10 @@ enum InBetween {
 }
 
 // Call only after initial parenthesis has been consumed
-fn parse_inside_enclosure(tokens: &mut dyn Iterator<Item = Token>, enclosure: ExpEnclosure) -> ExpRef {
+fn parse_inside_enclosure(
+    tokens: &mut dyn Iterator<Item = Token>,
+    enclosure: ExpEnclosure,
+) -> ExpRef {
     let mut level = 1;
     let mut take_while = tokens.take_while(|token| {
         match enclosure {
@@ -461,14 +460,14 @@ fn parse_inside_enclosure(tokens: &mut dyn Iterator<Item = Token>, enclosure: Ex
                     Token::Symbol(Symbol::CloseParenthesis) => level -= 1,
                     _ => {}
                 };
-            },
+            }
             ExpEnclosure::SquareBracket => {
                 match token {
                     Token::Symbol(Symbol::OpenSquareBracket) => level += 1,
                     Token::Symbol(Symbol::CloseSquareBracket) => level -= 1,
                     _ => {}
                 };
-            },
+            }
         }
 
         level > 0
@@ -500,43 +499,40 @@ fn parse_function_parameters(tokens: &mut dyn Iterator<Item = Token>) -> Vec<Str
 #[derive(Eq, PartialEq, Debug)]
 enum ExpEnclosure {
     Parenthesis,
-    SquareBracket
+    SquareBracket,
 }
 
-fn parse_comma_list(tokens: &mut dyn Iterator<Item = Token>, enclosure: ExpEnclosure) -> Vec<ExpRef> {
+fn parse_comma_list(
+    tokens: &mut dyn Iterator<Item = Token>,
+    enclosure: ExpEnclosure,
+) -> Vec<ExpRef> {
     let mut next = true;
     let mut arguments = Vec::new();
-    let (open, close) = match enclosure {
-        ExpEnclosure::Parenthesis => (Token::Symbol(Symbol::OpenParenthesis), Token::Symbol(Symbol::CloseParenthesis)),
-        ExpEnclosure::SquareBracket => (Token::Symbol(Symbol::OpenSquareBracket), Token::Symbol(Symbol::CloseSquareBracket))
-    };
     while next {
         let mut level = Vec::new();
         let mut take_while = tokens
             .take_while(|token| {
                 match token {
                     Token::Symbol(Symbol::OpenParenthesis) => level.push(ExpEnclosure::Parenthesis),
-                    Token::Symbol(Symbol::OpenSquareBracket) => level.push(ExpEnclosure::SquareBracket),
-                    Token::Symbol(Symbol::CloseParenthesis) => {
-                        match level.pop() {
-                            Some(top) => assert_eq!(ExpEnclosure::Parenthesis, top),
-                            None => {
-                                assert_eq!(enclosure, ExpEnclosure::Parenthesis);
-                                next = false;
-                                return false;
-                            },
-                        }
+                    Token::Symbol(Symbol::OpenSquareBracket) => {
+                        level.push(ExpEnclosure::SquareBracket)
                     }
-                    Token::Symbol(Symbol::CloseSquareBracket) => {
-                        match level.pop() {
-                            Some(top) => assert_eq!(ExpEnclosure::SquareBracket, top),
-                            None => {
-                                assert_eq!(enclosure, ExpEnclosure::SquareBracket);
-                                next = false;
-                                return false;
-                            },
+                    Token::Symbol(Symbol::CloseParenthesis) => match level.pop() {
+                        Some(top) => assert_eq!(ExpEnclosure::Parenthesis, top),
+                        None => {
+                            assert_eq!(enclosure, ExpEnclosure::Parenthesis);
+                            next = false;
+                            return false;
                         }
-                    }
+                    },
+                    Token::Symbol(Symbol::CloseSquareBracket) => match level.pop() {
+                        Some(top) => assert_eq!(ExpEnclosure::SquareBracket, top),
+                        None => {
+                            assert_eq!(enclosure, ExpEnclosure::SquareBracket);
+                            next = false;
+                            return false;
+                        }
+                    },
                     Token::Symbol(Symbol::Comma) => {
                         if level.is_empty() {
                             return false;
@@ -605,40 +601,41 @@ where
     let mut iter = progress.into_iter();
     while let Some(next) = iter.next() {
         let next_between = match next {
-            Parsed(exp_ref) => {
-                match *exp_ref {
-                    Eval::Expression(Expression::FunctionCall { arguments, .. }) => {
-                        let call = if let Some(Parsed(exp_ref)) = result.pop() {
-                            match *exp_ref {
-                                Eval::Expression(Expression::Reference { target }) => {
-                                    Expression::FunctionCall { target, arguments }
-                                }
-                                Eval::Expression(Expression::FieldAccess { target, name }) => {
-                                    Expression::MethodCall {
-                                        target,
-                                        field: name,
-                                        arguments,
-                                    }
-                                }
-                                _ => panic!(),
+            Parsed(exp_ref) => match *exp_ref {
+                Eval::Expression(Expression::FunctionCall { arguments, .. }) => {
+                    let call = if let Some(Parsed(exp_ref)) = result.pop() {
+                        match *exp_ref {
+                            Eval::Expression(Expression::Reference { target }) => {
+                                Expression::FunctionCall { target, arguments }
                             }
-                        } else {
-                            panic!()
-                        };
-                        Parsed(Box::new(Eval::Expression(call)))
-                    }
-                    Eval::Expression(Expression::ListAccess {index, .. }) => {
-                        let parent = if let Some(Parsed(exp_ref)) = result.pop() {
-                            exp_ref
-                        } else {
-                            panic!()
-                        };
-                        let expr = Expression::ListAccess { target: parent, index };
-                        Parsed(Box::new(Eval::Expression(expr)))
-                    }
-                    others => Parsed(Box::new(others))
+                            Eval::Expression(Expression::FieldAccess { target, name }) => {
+                                Expression::MethodCall {
+                                    target,
+                                    field: name,
+                                    arguments,
+                                }
+                            }
+                            _ => panic!(),
+                        }
+                    } else {
+                        panic!()
+                    };
+                    Parsed(Box::new(Eval::Expression(call)))
                 }
-            }
+                Eval::Expression(Expression::ListAccess { index, .. }) => {
+                    let parent = if let Some(Parsed(exp_ref)) = result.pop() {
+                        exp_ref
+                    } else {
+                        panic!()
+                    };
+                    let expr = Expression::ListAccess {
+                        target: parent,
+                        index,
+                    };
+                    Parsed(Box::new(Eval::Expression(expr)))
+                }
+                others => Parsed(Box::new(others)),
+            },
             Lexeme(Token::Symbol(Symbol::Period)) => {
                 let lhs_exp = if let Some(Parsed(exp_ref)) = result.pop() {
                     exp_ref
@@ -654,9 +651,12 @@ where
                 } else {
                     panic!()
                 };
-                Parsed(Box::new(Eval::Expression(Expression::FieldAccess { target: lhs_exp, name })))
+                Parsed(Box::new(Eval::Expression(Expression::FieldAccess {
+                    target: lhs_exp,
+                    name,
+                })))
             }
-            others => others
+            others => others,
         };
 
         result.push(next_between);
@@ -678,10 +678,12 @@ where
     let mut iter = progress.into_iter();
     while let Some(next) = iter.next() {
         let next_between = if let Lexeme(token) = next {
-            if let Some((_, func, lhs_conditional)) = targets.iter().find(|(kind, _, _)| &token == kind) {
+            if let Some((_, func, lhs_conditional)) =
+                targets.iter().find(|(kind, _, _)| &token == kind)
+            {
                 let is_binary = match result.last() {
                     Some(Lexeme(_)) | None => false,
-                    Some(Parsed(_)) => true
+                    Some(Parsed(_)) => true,
                 };
                 if is_binary && *lhs_conditional {
                     Lexeme(token)
@@ -721,16 +723,24 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
             Token::Symbol(Symbol::OpenParenthesis) => {
                 if let Some(Parsed(_)) = between.last() {
                     let args = parse_comma_list(tokens, ExpEnclosure::Parenthesis);
-                    let expr = Expression::FunctionCall { target: "".to_string(), arguments: args };
+                    let expr = Expression::FunctionCall {
+                        target: "".to_string(),
+                        arguments: args,
+                    };
                     Parsed(Box::new(Eval::Expression(expr)))
                 } else {
                     Parsed(parse_inside_enclosure(tokens, ExpEnclosure::Parenthesis))
                 }
-            },
+            }
             Token::Symbol(Symbol::OpenSquareBracket) => {
                 if let Some(Parsed(_)) = between.last() {
                     let expr = parse_inside_enclosure(tokens, ExpEnclosure::SquareBracket);
-                    let expr = Expression::ListAccess { target: Box::new(Eval::Expression(Expression::Joiner { expressions: vec![] })), index: expr };
+                    let expr = Expression::ListAccess {
+                        target: Box::new(Eval::Expression(Expression::Joiner {
+                            expressions: vec![],
+                        })),
+                        index: expr,
+                    };
                     Parsed(Box::new(Eval::Expression(expr)))
                 } else {
                     let items = parse_comma_list(tokens, ExpEnclosure::SquareBracket);
@@ -749,8 +759,8 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
         vec![(
             Token::Symbol(Symbol::ExclamationPoint),
             Box::new(|target| Expression::Negate { operand: target }),
-            false
-        )]
+            false,
+        )],
     );
     between = parser_pass(
         between,
@@ -764,7 +774,7 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
         vec![(
             Token::Symbol(Symbol::Minus),
             Box::new(|target| Expression::Negate { operand: target }),
-            true
+            true,
         )],
     );
     between = parser_pass(
@@ -880,7 +890,7 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
         vec![(
             Token::Keyword(Keyword::Return),
             Box::new(|target| Expression::Return { value: target }),
-            false
+            false,
         )],
     );
     let expr = if let Some(Parsed(exp_ref)) = between.pop() {

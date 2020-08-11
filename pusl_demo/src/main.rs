@@ -1,20 +1,20 @@
 extern crate pusl_lang;
-extern crate simplelog;
 extern crate shrust;
+extern crate simplelog;
 
+use pusl_lang::backend::debug::{DebugCommand, DebugResponse};
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
 use pusl_lang::backend::{execute, ExecContext};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
-use std::path::PathBuf;
-use simplelog::{TermLogger, TerminalMode, Config, LevelFilter, ConfigBuilder};
-use std::sync::mpsc;
-use pusl_lang::backend::debug::{DebugResponse, DebugCommand};
-use std::thread;
-use shrust::{Shell, ExecError, ShellIO};
-use std::sync::mpsc::RecvError;
-use std::process::exit;
+use shrust::{ExecError, Shell, ShellIO};
+use simplelog::{Config, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
 use std::num::ParseIntError;
+use std::path::PathBuf;
+use std::process::exit;
+use std::sync::mpsc;
+use std::sync::mpsc::RecvError;
+use std::thread;
 
 const SMALL_SOURCE: &'static str = include_str!("../resources/simple_program.pusl");
 const SECOND_SOURCE: &'static str = include_str!("../resources/secondary_source.pusl");
@@ -30,7 +30,8 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
 
 fn main() {
     let mut config = ConfigBuilder::new();
-    config.set_time_level(LevelFilter::Off)
+    config
+        .set_time_level(LevelFilter::Off)
         .set_location_level(LevelFilter::Off)
         .set_thread_level(LevelFilter::Off);
     TermLogger::init(LevelFilter::Debug, config.build(), TerminalMode::Mixed).unwrap();
@@ -38,7 +39,9 @@ fn main() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast, PathBuf::from("../resources/simple_program.pusl"));
-    let ctx = ExecContext { resolve:  test_resolve};
+    let ctx = ExecContext {
+        resolve: test_resolve,
+    };
     let (command_channel_send, command_channel_recv) = mpsc::channel::<DebugCommand>();
     let (response_channel_send, response_channel_recv) = mpsc::channel::<DebugResponse>();
     let cli_channels = (command_channel_send, response_channel_recv);
@@ -59,7 +62,7 @@ fn main() {
         match result {
             DebugResponse::Paused(line) => {
                 data.2 = line;
-            },
+            }
             DebugResponse::Done => {
                 exit(0);
             }
@@ -73,7 +76,7 @@ fn main() {
         match result {
             DebugResponse::Paused(line) => {
                 data.2 = line;
-            },
+            }
             DebugResponse::Done => {
                 exit(0);
             }
@@ -81,23 +84,26 @@ fn main() {
         Ok(())
     });
 
-    shell.new_command("line", "run to the specified bytecode index", 1,|io, data, args| {
-        let target = match args[0].parse::<usize>() {
-            Ok(line) => line,
-            Err(err) => return Err(ExecError::Other(Box::new(err))),
-        };
-        data.0.send(DebugCommand::RunToIndex(target)).unwrap();
-        let result = data.1.recv().unwrap();
-        match result {
-            DebugResponse::Paused(line) => {
-                data.2 = line
-            },
-            DebugResponse::Done => {
-                exit(0);
+    shell.new_command(
+        "line",
+        "run to the specified bytecode index",
+        1,
+        |io, data, args| {
+            let target = match args[0].parse::<usize>() {
+                Ok(line) => line,
+                Err(err) => return Err(ExecError::Other(Box::new(err))),
+            };
+            data.0.send(DebugCommand::RunToIndex(target)).unwrap();
+            let result = data.1.recv().unwrap();
+            match result {
+                DebugResponse::Paused(line) => data.2 = line,
+                DebugResponse::Done => {
+                    exit(0);
+                }
             }
-        }
-        Ok(())
-    });
+            Ok(())
+        },
+    );
 
     shell.run_loop(&mut ShellIO::default());
 }

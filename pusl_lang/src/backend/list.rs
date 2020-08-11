@@ -40,14 +40,14 @@ fn get_list_vec<R, T: FnOnce(&mut Vec<Value>) -> R>(object: &Option<Value>, acti
     }
 }
 
-fn list_push(mut args: Vec<Value>, this: Option<Value>, gc: GcPoolRef) -> Value {
+fn list_push(mut args: Vec<Value>, this: Option<Value>, _: GcPoolRef) -> Value {
     let value = args.pop().expect("must call push with 1 argument");
     assert!(args.is_empty());
     get_list_vec(&this, |vec| vec.push(value));
     Value::Null
 }
 
-fn list_index_get(mut args: Vec<Value>, this: Option<Value>, gc: GcPoolRef) -> Value {
+fn list_index_get(mut args: Vec<Value>, this: Option<Value>, _: GcPoolRef) -> Value {
     let index = args.pop().expect("must call @index_get with 1 argument");
     assert!(args.is_empty());
     let index = if let Value::Integer(index) = index {
@@ -55,13 +55,11 @@ fn list_index_get(mut args: Vec<Value>, this: Option<Value>, gc: GcPoolRef) -> V
     } else {
         panic!("Can only index list with integer")
     };
-    let element = get_list_vec(&this, |vec| {
-        vec.get(index).cloned()
-    });
+    let element = get_list_vec(&this, |vec| vec.get(index).cloned());
     element.expect("Index out of bounds")
 }
 
-fn list_index_set(mut args: Vec<Value>, this: Option<Value>, gc: GcPoolRef) -> Value {
+fn list_index_set(mut args: Vec<Value>, this: Option<Value>, _: GcPoolRef) -> Value {
     let index: Value = args.pop().expect("must call @index_set with 2 arguments");
     let value: Value = args.pop().expect("must call @index_set with 2 arguments");
     let index = if let Value::Integer(index) = index {
@@ -72,7 +70,6 @@ fn list_index_set(mut args: Vec<Value>, this: Option<Value>, gc: GcPoolRef) -> V
     get_list_vec(&this, |vec| {
         let reference = vec.get_mut(index).expect("Index out of bounds");
         *reference = value;
-
     });
 
     Value::Null

@@ -47,8 +47,8 @@ pub enum OpCode {
     IsNull,         // Replaces Value with False, Null with True
     Duplicate,      // Copies the top of the stack
     DuplicateMany,  // Copies n values onto top of stack (n is opcode)
-    PushBuiltin, // 1 ByteCode Value (index of reference pool)
-    DuplicateDeep, // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
+    PushBuiltin,    // 1 ByteCode Value (index of reference pool)
+    DuplicateDeep,  // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
 }
 
 #[derive(Copy, Clone)]
@@ -792,7 +792,9 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             let pool_index = func.add_reference(String::from("List"));
             func.code.push(ByteCode::val(pool_index));
             let num_values = values.len();
-            values.into_iter().for_each(|value| linearize_exp_ref(value, func, true));
+            values
+                .into_iter()
+                .for_each(|value| linearize_exp_ref(value, func, true));
             func.code.push(ByteCode::op(OpCode::FunctionCall));
             func.code.push(ByteCode::val(num_values));
             true

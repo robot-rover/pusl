@@ -3,19 +3,11 @@ use crate::parser::ExpRef;
 
 #[derive(Debug)]
 pub enum AssignAccess {
-    Field {
-        target: ExpRef,
-        name: String
-    },
+    Field { target: ExpRef, name: String },
 
-    Reference {
-        name: String,
-    },
+    Reference { name: String },
 
-    Array {
-        target: ExpRef,
-        index: ExpRef,
-    }
+    Array { target: ExpRef, index: ExpRef },
 }
 
 /// Syntax Blocks which are linear
@@ -129,13 +121,13 @@ pub enum Expression {
     },
 
     ListDeclaration {
-        values: Vec<ExpRef>
+        values: Vec<ExpRef>,
     },
 
     ListAccess {
         target: ExpRef,
         index: ExpRef,
-    }
+    },
 }
 
 bitflags! {

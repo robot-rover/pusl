@@ -47,7 +47,7 @@ where
     I: IntoIterator<Item = &'a str>,
 {
     let iter = lines.into_iter();
-    let mut indent_iter = iter.map(lex_line).filter(|(line, _)| !line.is_empty());
+    let indent_iter = iter.map(lex_line).filter(|(line, _)| !line.is_empty());
     let mut last_indent = Vec::new();
     let mut lines = Vec::new();
     for (tokens, indent_tokens) in indent_iter {
