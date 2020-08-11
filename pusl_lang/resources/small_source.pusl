@@ -15,11 +15,11 @@ while i < 10:
 let whomst = 10
 
 if houston() == true:
- print()
+    print()
 else if a + b > 10:
- panic()
+    panic()
 else:
- let whomst = "Heyo!"
+  let whomst = "Heyo!"
 
 while f != 0:
  print("Hello World " + f)

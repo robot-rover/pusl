@@ -6,6 +6,7 @@
 use crate::lexer::peek_while::peek_while;
 use crate::lexer::token::Symbol::*;
 use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Literal, Symbol, Token};
+use std::cmp;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -14,6 +15,31 @@ pub mod token;
 
 type Source<'a> = Peekable<Chars<'a>>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IndentChar {
+    Tab,
+    Space,
+}
+
+impl IndentChar {
+    fn from_char(c: char) -> Option<IndentChar> {
+        match c {
+            ' ' => Some(IndentChar::Space),
+            '\t' => Some(IndentChar::Tab),
+            _ => None,
+        }
+    }
+
+    fn compare(old: &Vec<IndentChar>, new: &Vec<IndentChar>) -> Option<cmp::Ordering> {
+        for (old_char, new_char) in old.iter().zip(new.iter()) {
+            if old_char != new_char {
+                return None;
+            }
+        }
+        return Some(old.len().cmp(&new.len()));
+    }
+}
+
 //Todo: Support Non-Ascii
 
 pub fn lex<'a, I>(lines: I) -> Vec<LexUnit>
@@ -21,27 +47,44 @@ where
     I: IntoIterator<Item = &'a str>,
 {
     let iter = lines.into_iter();
-    let mut iter = iter
-        .map(lex_line)
-        .filter(|(line, _)| !line.is_empty())
-        .peekable();
+    let mut indent_iter = iter.map(lex_line).filter(|(line, _)| !line.is_empty());
+    let mut last_indent = Vec::new();
+    let mut lines = Vec::new();
+    for (tokens, indent_tokens) in indent_iter {
+        assert!(IndentChar::compare(&last_indent, &indent_tokens).is_some());
+        lines.push((tokens, indent_tokens.len()));
+        last_indent = indent_tokens;
+    }
+
     let mut roots = Vec::new();
-    while let Some(root) = lex_internal(&mut iter, 0) {
+    let mut iter = lines.into_iter().peekable();
+
+    while let Some(root) = lex_internal(&mut iter) {
         roots.push(root);
     }
 
     roots
 }
 
-fn lex_internal<I>(stream: &mut Peekable<I>, indent: usize) -> Option<LexUnit>
+fn lex_internal<I>(stream: &mut Peekable<I>) -> Option<LexUnit>
 where
     I: Iterator<Item = (Vec<Token>, usize)>,
 {
     if let Some((tokens, indentation)) = stream.next() {
-        assert_eq!(indent, indentation);
         let mut children = Vec::new();
-        while stream.peek().map_or(false, |e| e.1 == indent + 1) {
-            if let Some(child) = lex_internal(stream, indent + 1) {
+        let mut children_indent: Option<usize> = None;
+        while stream
+            .peek()
+            .map_or(false, |(_, child_indent)| indentation < *child_indent)
+        {
+            if let Some(children_indent) = children_indent {
+                let (_, this_indent) = stream.peek().unwrap();
+                assert_eq!(children_indent, *this_indent);
+            } else {
+                let (_, this_indent) = stream.peek().unwrap();
+                children_indent = Some(*this_indent);
+            }
+            if let Some(child) = lex_internal(stream) {
                 children.push(child)
             } else {
                 panic!();
@@ -185,9 +228,11 @@ fn read_string_literal(line: &mut Source) -> String {
     string
 }
 
-fn lex_line(line: &str) -> (Vec<Token>, usize) {
+fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
     let mut cursor: Source = line.chars().peekable();
-    let indentation = peek_while(&mut cursor, |&c| c == ' ').count();
+    let indentation = peek_while(cursor.by_ref(), |&c| c == ' ' || c == '\t')
+        .map(|c| IndentChar::from_char(c).unwrap())
+        .collect();
     let mut tokens = Vec::new();
     while let Some(&c) = cursor.peek() {
         if c.is_ascii_alphabetic() {

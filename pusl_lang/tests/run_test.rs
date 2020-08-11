@@ -25,6 +25,8 @@ fn small_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast, PathBuf::from("../resources/simple_program.pusl"));
-    let ctx = ExecContext { stdout: None, resolve:  test_resolve};
+    let ctx = ExecContext {
+        resolve: test_resolve,
+    };
     execute(code, ctx, None);
 }
