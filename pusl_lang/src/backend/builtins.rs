@@ -29,7 +29,7 @@ fn type_of(mut args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
 }
 
 fn print(args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
-    for value in args.into_iter().rev() {
+    for value in args.into_iter() {
         print!("{}", value);
     }
     Value::Null
