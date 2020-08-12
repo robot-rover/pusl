@@ -7,7 +7,6 @@ use crate::backend::linearize::{resolve, ByteCodeFile, Function, OpCode};
 use crate::backend::object::{Object, ObjectPtr, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
-use std::io;
 use std::path::PathBuf;
 
 use log::trace;
@@ -104,7 +103,6 @@ impl StackFrame {
 
 thread_local! {
     pub static GC: RefCell<ManagedPool> = RefCell::new(ManagedPool::new());
-    pub static STDOUT: RefCell<Box<dyn io::Write>> = RefCell::new(Box::new(io::stdout()));
 }
 
 pub type GcPoolRef = &'static LocalKey<RefCell<ManagedPool>>;
