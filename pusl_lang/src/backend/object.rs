@@ -2,13 +2,15 @@ use crate::backend::GcPoolRef;
 use crate::backend::RFunction;
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
+use fmt::Display;
 use garbage::{GcPointer, MarkTrace};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::Display;
 use typemap::TypeMap;
 
 pub type ObjectPtr = GcPointer<RefCell<Object>>;
+pub type StringPtr = GcPointer<String>;
 pub type NativeFn = fn(Vec<Value>, Option<Value>, GcPoolRef) -> Value;
 
 #[derive(Clone, Debug)]
@@ -17,11 +19,45 @@ pub enum Value {
     Boolean(bool),
     Integer(i64),
     Float(f64),
-    String(GcPointer<String>),
+    String(StringPtr),
     Function(&'static RFunction),
     Native(NativeFn),
     Object(ObjectPtr),
 }
+
+macro_rules! value_try_from {
+    ($datatype:ty, $enumval:path) => {
+        impl TryFrom<Value> for $datatype {
+            type Error = &'static str;
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
+                if let $enumval(value) = value {
+                    Ok(value)
+                } else {
+                    Err(concat!("Value is not a ", stringify!($enumval)))
+                }
+            }
+        }
+
+        impl TryFrom<Value> for Option<$datatype> {
+            type Error = &'static str;
+            fn try_from(value: Value) -> Result<Self, Self::Error> {
+                match value {
+                    Value::Null => Ok(None),
+                    $enumval(value) => Ok(Some(value)),
+                    _ => Err(concat!("Value is not a ", stringify!($enumval))),
+                }
+            }
+        }
+    };
+}
+
+value_try_from!(bool, Value::Boolean);
+value_try_from!(i64, Value::Integer);
+value_try_from!(f64, Value::Float);
+value_try_from!(StringPtr, Value::String);
+value_try_from!(&'static RFunction, Value::Function);
+value_try_from!(NativeFn, Value::Native);
+value_try_from!(ObjectPtr, Value::Object);
 
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {

@@ -294,7 +294,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         let mut arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_function(reference);
                         for name in reference.args.iter().cloned() {
-                            let value = arg_value_iter.next().expect("Wrong Number of arguments for function");
+                            let value = arg_value_iter
+                                .next()
+                                .expect("Wrong Number of arguments for function");
                             new_frame
                                 .variables
                                 .push(VariableStack::Variable(Variable { value, name }));

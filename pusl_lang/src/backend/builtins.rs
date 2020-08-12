@@ -1,3 +1,5 @@
+use super::object::ObjectPtr;
+use crate::backend::argparse;
 use crate::backend::list;
 use crate::backend::object::{Object, Value};
 use crate::backend::GcPoolRef;
@@ -15,17 +17,11 @@ pub fn get_builtins() -> HashMap<&'static str, Value> {
     map
 }
 
-fn type_of(mut args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
-    if let Some(value) = args.pop() {
-        if !args.is_empty() {
-            panic!()
-        }
-        let type_string = value.type_string();
-        let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(type_string.to_owned()));
-        Value::String(gc_ptr)
-    } else {
-        panic!()
-    }
+fn type_of(args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
+    let value: Value = argparse::parse1(args);
+    let type_string = value.type_string();
+    let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(type_string.to_owned()));
+    Value::String(gc_ptr)
 }
 
 fn print(args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
@@ -35,28 +31,21 @@ fn print(args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
     Value::Null
 }
 
-fn native_import(mut args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
+fn native_import(args: Vec<Value>, _: Option<Value>, _: GcPoolRef) -> Value {
     #[allow(unused_variables)]
-    let import_name = args.pop().expect("native takes 1 argument");
-    assert!(args.is_empty());
+    let import_name: Value = argparse::parse1(args);
     unimplemented!();
 }
 
-fn new_object(mut args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
-    if args.len() > 1 {
-        panic!()
-    }
-    let object = if let Some(super_obj) = args.pop() {
-        let super_obj = if let Value::Object(ptr) = super_obj {
-            ptr
-        } else {
-            panic!()
-        };
+fn new_object(args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
+    let super_obj: Option<ObjectPtr> = argparse::parse_option(args);
+
+    let object_ptr = if let Some(super_obj) = super_obj {
         Object::new_with_parent(super_obj)
     } else {
         Object::new()
     };
-    let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(object));
+    let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(object_ptr));
 
     Value::Object(gc_ptr)
 }
