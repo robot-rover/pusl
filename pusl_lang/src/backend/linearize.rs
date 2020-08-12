@@ -1,15 +1,16 @@
 use crate::backend::object::{Object, ObjectPtr};
-use crate::backend::RFunction;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
 use garbage::ManagedPool;
+use pad_adapter::PadAdapter;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cell::RefCell;
 use std::fmt;
+use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::thread::LocalKey;
@@ -132,7 +133,7 @@ impl ByteCode {
 
 pub struct ByteCodeFile {
     pub file: PathBuf,
-    pub base_func: Function<()>,
+    pub base_func: BasicFunction,
     pub imports: Vec<Import>,
 }
 
@@ -164,90 +165,147 @@ impl Debug for ByteCodeFile {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Function<T> {
+#[derive(Clone)]
+pub struct ResolvedFunction {
+    pub function: Function,
+    pub imports: &'static Vec<(String, ObjectPtr)>,
+    pub sub_functions: Vec<ResolvedFunction>,
+}
+
+impl Debug for ResolvedFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if !f.alternate() {
+            self.function.fmt(f)?;
+            write!(
+                f,
+                ", sub-fns: {}, imports: {}",
+                self.sub_functions.len(),
+                self.imports.len()
+            )
+        } else {
+            self.function.fmt(f)?;
+            write!(f, "\nImports:")?;
+            for (import, target) in self.imports {
+                write!(f, "\n{} => {:?}", import, target)?;
+            }
+            write!(f, "\nSub-Functions:")?;
+            for (index, sub_fn) in self.sub_functions.iter().enumerate() {
+                write!(f, "\n{:4}:", index)?;
+                let mut adapter = PadAdapter::new(f);
+                write!(adapter, "{:#?}", sub_fn)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+impl ResolvedFunction {
+    pub fn get_function(&self, pool_index: usize) -> &ResolvedFunction {
+        &self.sub_functions[pool_index]
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Function {
     pub args: Vec<String>,
     literals: Vec<Literal>,
     references: Vec<String>,
     pub(crate) code: Vec<ByteCode>,
-    pub sub_functions: Vec<Function<T>>,
-    #[serde(skip)]
-    pub resolved: T,
 }
 
-pub fn resolve<'a, I>(
-    function: Function<()>,
-    global_imports: I,
-    target_imports: Vec<Import>,
-    gc: &'static LocalKey<RefCell<ManagedPool>>,
-) -> &'static RFunction
-where
-    I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
-{
-    let Function {
-        args,
-        literals,
-        references,
-        code,
-        sub_functions,
-        ..
-    } = function;
-
-    let mut iter = global_imports.into_iter();
-    let mut imports = Vec::new();
-    for Import { path, alias } in target_imports {
-        let import_parent: ObjectPtr = iter
-            .by_ref()
-            .find(|i| &i.0 == &path)
-            .map(|i| i.1.clone())
-            .unwrap();
-        let import_object = Object::new_with_parent(import_parent);
-        let import_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(import_object));
-        imports.push((alias, import_ptr));
-    }
-
-    let imports: &Vec<_> = Box::leak(Box::new(imports));
-
-    let sub_functions = sub_functions
-        .into_iter()
-        .map(|f| sub_resolve(f, imports))
-        .collect();
-
-    let result = RFunction {
-        args,
-        literals,
-        references,
-        code,
-        sub_functions,
-        resolved: imports,
-    };
-    Box::leak(Box::new(result))
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BasicFunction {
+    pub function: Function,
+    pub sub_functions: Vec<BasicFunction>,
 }
 
-fn sub_resolve(function: Function<()>, imports: &'static Vec<(String, ObjectPtr)>) -> RFunction {
-    let Function {
-        args,
-        literals,
-        references,
-        code,
-        sub_functions,
-        ..
-    } = function;
-    let sub_functions = sub_functions
-        .into_iter()
-        .map(|f| sub_resolve(f, imports))
-        .collect();
-    RFunction {
-        args,
-        literals,
-        references,
-        code,
-        sub_functions,
-        resolved: imports,
+impl Debug for BasicFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if !f.alternate() {
+            self.function.fmt(f)?;
+            write!(f, ", sub-fns: {}", self.sub_functions.len())
+        } else {
+            self.function.fmt(f)?;
+            write!(f, "\nSub-Functions:")?;
+            for (index, sub_fn) in self.sub_functions.iter().enumerate() {
+                writeln!(f, "\n{:4}:", index)?;
+                let mut adapter = PadAdapter::new(f);
+                write!(adapter, "{:#?}", sub_fn)?;
+            }
+            Ok(())
+        }
     }
 }
 
-impl<T> Debug for Function<T> {
+impl From<Function> for BasicFunction {
+    fn from(function: Function) -> Self {
+        BasicFunction {
+            function,
+            sub_functions: Vec::new(),
+        }
+    }
+}
+
+impl BasicFunction {
+    pub fn resolve<'a, I>(
+        self,
+        global_imports: I,
+        target_imports: Vec<Import>,
+        gc: &'static LocalKey<RefCell<ManagedPool>>,
+    ) -> &'static ResolvedFunction
+    where
+        I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
+    {
+        let BasicFunction {
+            function,
+            sub_functions,
+        } = self;
+        let mut iter = global_imports.into_iter();
+        let mut imports = Vec::new();
+        for Import { path, alias } in target_imports {
+            let import_parent: ObjectPtr = iter
+                .by_ref()
+                .find(|i| &i.0 == &path)
+                .map(|i| i.1.clone())
+                .unwrap();
+            let import_object = Object::new_with_parent(import_parent);
+            let import_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(import_object));
+            imports.push((alias, import_ptr));
+        }
+
+        let imports: &Vec<_> = Box::leak(Box::new(imports));
+
+        let sub_functions = sub_functions
+            .into_iter()
+            .map(|f| f.sub_resolve(imports))
+            .collect();
+
+        let result = ResolvedFunction {
+            function,
+            imports,
+            sub_functions,
+        };
+        Box::leak(Box::new(result))
+    }
+
+    fn sub_resolve(self, imports: &'static Vec<(String, ObjectPtr)>) -> ResolvedFunction {
+        let BasicFunction {
+            function,
+            sub_functions,
+        } = self;
+        let sub_functions = sub_functions
+            .into_iter()
+            .map(|f| f.sub_resolve(imports))
+            .collect();
+        ResolvedFunction {
+            function,
+            sub_functions,
+            imports,
+        }
+    }
+}
+
+impl Debug for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "Function(")?;
         let mut arg_iter = self.args.iter().peekable();
@@ -261,40 +319,38 @@ impl<T> Debug for Function<T> {
         if !f.alternate() {
             write!(
                 f,
-                " - lits: {}, refs: {}, code: {}, sub-funcs: {}",
+                " - lits: {}, refs: {}, code: {}",
                 self.literals.len(),
                 self.references.len(),
                 self.code.len(),
-                self.sub_functions.len()
             )?;
         } else {
             writeln!(f, "\nLiterals:")?;
             for (index, literal) in self.literals.iter().enumerate() {
-                writeln!(f, "\t{:3}: {:?}", index, literal)?;
+                writeln!(f, "    {:3}: {:?}", index, literal)?;
             }
             writeln!(f, "References:")?;
             for (index, reference) in self.references.iter().enumerate() {
-                writeln!(f, "\t{:3}: {}", index, reference)?;
-            }
-            writeln!(f, "Sub-Functions:")?;
-            for (index, sub_function) in self.sub_functions.iter().enumerate() {
-                writeln!(f, "\t{:3}: {:?}", index, sub_function)?;
+                writeln!(f, "    {:3}: {}", index, reference)?;
             }
             writeln!(f, "Code:")?;
-            let mut code_iter = self.code.iter().enumerate();
+            let mut code_iter = self.code.iter().enumerate().peekable();
             while let Some(tuple) = code_iter.next() {
                 write_bytecode_line(tuple, f, &mut code_iter, &self)?;
+                if code_iter.peek().is_some() {
+                    writeln!(f, "")?;
+                }
             }
         }
         Ok(())
     }
 }
 
-pub fn write_bytecode_line<'a, T, F, W>(
+pub fn write_bytecode_line<'a, T, W>(
     line: (usize, &ByteCode),
     f: &mut W,
     code_iter: &mut T,
-    func: &Function<F>,
+    func: &Function,
 ) -> fmt::Result
 where
     T: Iterator<Item = (usize, &'a ByteCode)>,
@@ -302,63 +358,62 @@ where
 {
     let (index, bytecode) = line;
     let op_code = bytecode.as_op();
-    write!(f, "\t{:3}: ", index)?;
+    write!(f, "    {:3}: ", index)?;
     match op_code {
-        OpCode::PushSelf => writeln!(f, "PushSelf")?,
-        OpCode::Modulus => writeln!(f, "Modulus")?,
+        OpCode::PushSelf => write!(f, "PushSelf")?,
+        OpCode::Modulus => write!(f, "Modulus")?,
         OpCode::Literal => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.literals[pool_index];
-            writeln!(f, "Literal {:?}[{}]", pool_value, pool_index)?;
+            write!(f, "Literal {:?}[{}]", pool_value, pool_index)?;
         }
         OpCode::PushReference => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
-            writeln!(f, "PushRef \"{}\"[{}]", pool_value, pool_index)?;
+            write!(f, "PushRef \"{}\"[{}]", pool_value, pool_index)?;
         }
         OpCode::PushFunction => {
             let pool_index = code_iter.next().unwrap().1.as_val();
-            let pool_value = &func.sub_functions[pool_index];
-            writeln!(f, "PushFunc {:?} | [{}]", pool_value, pool_index)?;
+            write!(f, "PushFunc [{}]", pool_index)?;
         }
         OpCode::FunctionCall => {
             let num_args = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "FnCall {}", num_args)?;
+            write!(f, "FnCall {}", num_args)?;
         }
         OpCode::MethodCall => {
             let num_args = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "MethodCall {}", num_args)?;
+            write!(f, "MethodCall {}", num_args)?;
         }
         OpCode::FieldAccess => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
-            writeln!(f, "Field {}[{}]", pool_value, pool_index)?;
+            write!(f, "Field {}[{}]", pool_value, pool_index)?;
         }
-        OpCode::Addition => writeln!(f, "Addition")?,
-        OpCode::Subtraction => writeln!(f, "Subtraction")?,
-        OpCode::Negate => writeln!(f, "Negate")?,
-        OpCode::Multiply => writeln!(f, "Multiply")?,
-        OpCode::Divide => writeln!(f, "Divide")?,
-        OpCode::DivideTruncate => writeln!(f, "DivTrunc")?,
-        OpCode::Exponent => writeln!(f, "Exponent")?,
+        OpCode::Addition => write!(f, "Addition")?,
+        OpCode::Subtraction => write!(f, "Subtraction")?,
+        OpCode::Negate => write!(f, "Negate")?,
+        OpCode::Multiply => write!(f, "Multiply")?,
+        OpCode::Divide => write!(f, "Divide")?,
+        OpCode::DivideTruncate => write!(f, "DivTrunc")?,
+        OpCode::Exponent => write!(f, "Exponent")?,
         OpCode::Compare => {
             let compare = unsafe { code_iter.next().unwrap().1.compare };
-            writeln!(f, "Compare {:?}", compare)?;
+            write!(f, "Compare {:?}", compare)?;
         }
-        OpCode::And => writeln!(f, "And")?,
-        OpCode::Or => writeln!(f, "Or")?,
-        OpCode::ScopeUp => writeln!(f, "ScopeUp")?,
-        OpCode::ScopeDown => writeln!(f, "ScopeDown")?,
-        OpCode::Return => writeln!(f, "Return")?,
+        OpCode::And => write!(f, "And")?,
+        OpCode::Or => write!(f, "Or")?,
+        OpCode::ScopeUp => write!(f, "ScopeUp")?,
+        OpCode::ScopeDown => write!(f, "ScopeDown")?,
+        OpCode::Return => write!(f, "Return")?,
         OpCode::ConditionalJump => {
             let jump_index = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "CndJmp {}", jump_index)?;
+            write!(f, "CndJmp {}", jump_index)?;
         }
         OpCode::ComparisonJump => {
             let greater_jump_index = code_iter.next().unwrap().1.as_val();
             let less_jump_index = code_iter.next().unwrap().1.as_val();
             let equal_jump_index = code_iter.next().unwrap().1.as_val();
-            writeln!(
+            write!(
                 f,
                 "CmpJmp G:{} L:{} E:{}",
                 greater_jump_index, less_jump_index, equal_jump_index
@@ -366,16 +421,16 @@ where
         }
         OpCode::Jump => {
             let jump_index = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "Jmp {}", jump_index)?;
+            write!(f, "Jmp {}", jump_index)?;
         }
-        OpCode::Pop => writeln!(f, "Pop")?,
-        OpCode::IsNull => writeln!(f, "IsNull")?,
-        OpCode::Duplicate => writeln!(f, "Duplicate")?,
+        OpCode::Pop => write!(f, "Pop")?,
+        OpCode::IsNull => write!(f, "IsNull")?,
+        OpCode::Duplicate => write!(f, "Duplicate")?,
         OpCode::AssignReference => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
             let is_let = unsafe { code_iter.next().unwrap().1.let_assign };
-            writeln!(
+            write!(
                 f,
                 "AssignRef let:{} \"{}\"[{}]",
                 is_let, pool_value, pool_index
@@ -385,7 +440,7 @@ where
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
             let is_let = unsafe { code_iter.next().unwrap().1.let_assign };
-            writeln!(
+            write!(
                 f,
                 "AssignField let:{} \"{}\"[{}]",
                 is_let, pool_value, pool_index
@@ -393,23 +448,23 @@ where
         }
         OpCode::DuplicateMany => {
             let n = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "DuplicateMany {}", n)?;
+            write!(f, "DuplicateMany {}", n)?;
         }
         OpCode::PushBuiltin => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
-            writeln!(f, "PushBuiltin \"{}\"[{}]", pool_value, pool_index)?;
+            write!(f, "PushBuiltin \"{}\"[{}]", pool_value, pool_index)?;
         }
         OpCode::DuplicateDeep => {
             let dup_index = code_iter.next().unwrap().1.as_val();
-            writeln!(f, "DuplicateDeep {}", dup_index)?;
+            write!(f, "DuplicateDeep {}", dup_index)?;
         }
     }
 
     Ok(())
 }
 
-impl<T> Function<T> {
+impl Function {
     pub fn get_code(&self, index: usize) -> Option<OpCode> {
         self.code.get(index).map(|b| b.as_op())
     }
@@ -434,10 +489,6 @@ impl<T> Function<T> {
     //TODO: don't clone this
     pub fn get_reference(&self, index: usize) -> String {
         self.references[index].clone()
-    }
-
-    pub fn get_function(&self, index: usize) -> &Function<T> {
-        &self.sub_functions[index]
     }
 
     fn add_literal(&mut self, literal: Literal) -> usize {
@@ -498,14 +549,12 @@ impl<T> Function<T> {
         self.code.len()
     }
 
-    fn with_args(args: Vec<String>, resolved: T) -> Function<T> {
+    fn new(args: Vec<String>) -> Self {
         Function {
             args,
             literals: vec![],
             references: vec![],
             code: vec![],
-            sub_functions: vec![],
-            resolved,
         }
     }
 }
@@ -520,14 +569,15 @@ pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
     }
 }
 
-fn linearize(expr: ExpRef, args: Vec<String>) -> Function<()> {
-    let mut code = Function::<()>::with_args(args, ());
-    linearize_exp_ref(expr, &mut code, false);
+fn linearize(expr: ExpRef, args: Vec<String>) -> BasicFunction {
+    let code = Function::new(args);
+    let mut function = BasicFunction::from(code);
+    linearize_exp_ref(expr, &mut function, false);
 
-    code
+    function
 }
 
-fn linearize_exp_ref(exp_ref: ExpRef, func: &mut Function<()>, expand_stack: bool) {
+fn linearize_exp_ref(exp_ref: ExpRef, func: &mut BasicFunction, expand_stack: bool) {
     match *exp_ref {
         Eval::Branch(branch) => {
             assert!(!expand_stack);
@@ -537,28 +587,28 @@ fn linearize_exp_ref(exp_ref: ExpRef, func: &mut Function<()>, expand_stack: boo
     }
 }
 
-fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool) {
+fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool) {
     let created_value = match expr {
         Expression::Modulus { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Modulus));
+            func.function.code.push(ByteCode::op(OpCode::Modulus));
             true
         }
         Expression::Literal { value } => {
-            let literal_index = func.add_literal(value);
-            func.code.push(ByteCode::op(OpCode::Literal));
-            func.code.push(ByteCode::val(literal_index));
+            let literal_index = func.function.add_literal(value);
+            func.function.code.push(ByteCode::op(OpCode::Literal));
+            func.function.code.push(ByteCode::val(literal_index));
             true
         }
         Expression::SelfReference => {
-            func.code.push(ByteCode::op(OpCode::PushSelf));
+            func.function.code.push(ByteCode::op(OpCode::PushSelf));
             true
         }
         Expression::Reference { target } => {
-            let reference_index = func.add_reference(target);
-            func.code.push(ByteCode::op(OpCode::PushReference));
-            func.code.push(ByteCode::val(reference_index));
+            let reference_index = func.function.add_reference(target);
+            func.function.code.push(ByteCode::op(OpCode::PushReference));
+            func.function.code.push(ByteCode::val(reference_index));
             true
         }
         Expression::Joiner { expressions } => {
@@ -569,15 +619,15 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             false
         }
         Expression::FunctionCall { target, arguments } => {
-            func.code.push(ByteCode::op(OpCode::PushReference));
-            let pool_index = func.add_reference(target);
-            func.code.push(ByteCode::val(pool_index));
+            func.function.code.push(ByteCode::op(OpCode::PushReference));
+            let pool_index = func.function.add_reference(target);
+            func.function.code.push(ByteCode::val(pool_index));
             let num_args = arguments.len();
             arguments
                 .into_iter()
                 .for_each(|argument| linearize_exp_ref(argument, func, true));
-            func.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.code.push(ByteCode::val(num_args));
+            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
+            func.function.code.push(ByteCode::val(num_args));
             true
         }
         Expression::MethodCall {
@@ -586,64 +636,64 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             arguments,
         } => {
             linearize_exp_ref(target, func, true);
-            func.code.push(ByteCode::op(OpCode::Duplicate));
-            func.code.push(ByteCode::op(OpCode::FieldAccess));
-            let pool_index = func.add_reference(field);
-            func.code.push(ByteCode::val(pool_index));
+            func.function.code.push(ByteCode::op(OpCode::Duplicate));
+            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+            let pool_index = func.function.add_reference(field);
+            func.function.code.push(ByteCode::val(pool_index));
             let num_args = arguments.len();
             arguments
                 .into_iter()
                 .for_each(|argument| linearize_exp_ref(argument, func, true));
-            func.code.push(ByteCode::op(OpCode::MethodCall));
-            func.code.push(ByteCode::val(num_args));
+            func.function.code.push(ByteCode::op(OpCode::MethodCall));
+            func.function.code.push(ByteCode::val(num_args));
             true
         }
         Expression::FieldAccess { target, name } => {
             linearize_exp_ref(target, func, true);
-            let reference_index = func.add_reference(name);
-            func.code.push(ByteCode::op(OpCode::FieldAccess));
-            func.code.push(ByteCode::val(reference_index));
+            let reference_index = func.function.add_reference(name);
+            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+            func.function.code.push(ByteCode::val(reference_index));
             true
         }
         Expression::Addition { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Addition));
+            func.function.code.push(ByteCode::op(OpCode::Addition));
             true
         }
         Expression::Subtract { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Subtraction));
+            func.function.code.push(ByteCode::op(OpCode::Subtraction));
             true
         }
         Expression::Negate { operand } => {
             linearize_exp_ref(operand, func, true);
-            func.code.push(ByteCode::op(OpCode::Negate));
+            func.function.code.push(ByteCode::op(OpCode::Negate));
             true
         }
         Expression::Multiply { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Multiply));
+            func.function.code.push(ByteCode::op(OpCode::Multiply));
             true
         }
         Expression::Divide { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Multiply));
+            func.function.code.push(ByteCode::op(OpCode::Multiply));
             true
         }
         Expression::Elvis { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Duplicate));
-            func.code.push(ByteCode::op(OpCode::IsNull));
-            func.code.push(ByteCode::op(OpCode::Negate));
-            let use_first_index = func.place_jump(true);
-            func.code.push(ByteCode::op(OpCode::Pop));
+            func.function.code.push(ByteCode::op(OpCode::Duplicate));
+            func.function.code.push(ByteCode::op(OpCode::IsNull));
+            func.function.code.push(ByteCode::op(OpCode::Negate));
+            let use_first_index = func.function.place_jump(true);
+            func.function.code.push(ByteCode::op(OpCode::Pop));
             linearize_exp_ref(rhs, func, true);
-            let current_index = func.current_index();
-            func.set_jump(use_first_index, current_index);
+            let current_index = func.function.current_index();
+            func.function.set_jump(use_first_index, current_index);
             true
         }
         Expression::Assigment {
@@ -654,46 +704,50 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
             match target {
                 AssignAccess::Field { target, name } => {
                     linearize_exp_ref(target, func, true);
-                    let target_index = func.add_reference(name);
+                    let target_index = func.function.add_reference(name);
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.code.push(ByteCode::op(OpCode::Duplicate));
-                        func.code.push(ByteCode::op(OpCode::FieldAccess));
-                        func.code.push(ByteCode::val(target_index));
-                        func.code.push(ByteCode::op(OpCode::IsNull));
-                        func.code.push(ByteCode::op(OpCode::Negate));
-                        Some(func.place_jump(true))
+                        func.function.code.push(ByteCode::op(OpCode::Duplicate));
+                        func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+                        func.function.code.push(ByteCode::val(target_index));
+                        func.function.code.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        Some(func.function.place_jump(true))
                     } else {
                         None
                     };
                     linearize_exp_ref(expression, func, true);
-                    func.code.push(ByteCode::op(OpCode::AssignField));
-                    func.code.push(ByteCode::val(target_index));
-                    func.code.push(ByteCode {
+                    func.function.code.push(ByteCode::op(OpCode::AssignField));
+                    func.function.code.push(ByteCode::val(target_index));
+                    func.function.code.push(ByteCode {
                         let_assign: flags.intersects(AssignmentFlags::LET),
                     });
                     if let Some(jump_instruction) = skip_index {
-                        func.set_jump(jump_instruction, func.current_index());
+                        func.function
+                            .set_jump(jump_instruction, func.function.current_index());
                     }
                 }
                 AssignAccess::Reference { name } => {
-                    let target_index = func.add_reference(name);
+                    let target_index = func.function.add_reference(name);
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.code.push(ByteCode::op(OpCode::PushReference));
-                        func.code.push(ByteCode::val(target_index));
-                        func.code.push(ByteCode::op(OpCode::IsNull));
-                        func.code.push(ByteCode::op(OpCode::Negate));
-                        Some(func.place_jump(true))
+                        func.function.code.push(ByteCode::op(OpCode::PushReference));
+                        func.function.code.push(ByteCode::val(target_index));
+                        func.function.code.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        Some(func.function.place_jump(true))
                     } else {
                         None
                     };
                     linearize_exp_ref(expression, func, true);
-                    func.code.push(ByteCode::op(OpCode::AssignReference));
-                    func.code.push(ByteCode::val(target_index));
-                    func.code.push(ByteCode {
+                    func.function
+                        .code
+                        .push(ByteCode::op(OpCode::AssignReference));
+                    func.function.code.push(ByteCode::val(target_index));
+                    func.function.code.push(ByteCode {
                         let_assign: flags.intersects(AssignmentFlags::LET),
                     });
                     if let Some(jump_instruction) = skip_index {
-                        func.set_jump(jump_instruction, func.current_index());
+                        func.function
+                            .set_jump(jump_instruction, func.function.current_index());
                     }
                 }
                 AssignAccess::Array { target, index } => {
@@ -701,38 +755,39 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
                     linearize_exp_ref(index, func, true);
 
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                        func.code.push(ByteCode::val(1));
-                        func.code.push(ByteCode::op(OpCode::Duplicate));
-                        func.code.push(ByteCode::op(OpCode::FieldAccess));
-                        let pool_index = func.add_reference(String::from("@index_get"));
-                        func.code.push(ByteCode::val(pool_index));
-                        func.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                        func.code.push(ByteCode::val(2));
-                        func.code.push(ByteCode::op(OpCode::MethodCall));
-                        func.code.push(ByteCode::val(1));
-                        func.code.push(ByteCode::op(OpCode::IsNull));
-                        func.code.push(ByteCode::op(OpCode::Negate));
-                        Some(func.place_jump(true))
+                        func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                        func.function.code.push(ByteCode::val(1));
+                        func.function.code.push(ByteCode::op(OpCode::Duplicate));
+                        func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+                        let pool_index = func.function.add_reference(String::from("@index_get"));
+                        func.function.code.push(ByteCode::val(pool_index));
+                        func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                        func.function.code.push(ByteCode::val(2));
+                        func.function.code.push(ByteCode::op(OpCode::MethodCall));
+                        func.function.code.push(ByteCode::val(1));
+                        func.function.code.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        Some(func.function.place_jump(true))
                     } else {
                         None
                     };
-                    func.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                    func.code.push(ByteCode::val(1));
-                    func.code.push(ByteCode::op(OpCode::FieldAccess));
-                    let pool_index = func.add_reference(String::from("@index_set"));
-                    func.code.push(ByteCode::val(pool_index));
-                    func.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                    func.code.push(ByteCode::val(2));
+                    func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.function.code.push(ByteCode::val(1));
+                    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+                    let pool_index = func.function.add_reference(String::from("@index_set"));
+                    func.function.code.push(ByteCode::val(pool_index));
+                    func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.function.code.push(ByteCode::val(2));
                     linearize_exp_ref(expression, func, true);
-                    func.code.push(ByteCode::op(OpCode::MethodCall));
-                    func.code.push(ByteCode::val(2));
+                    func.function.code.push(ByteCode::op(OpCode::MethodCall));
+                    func.function.code.push(ByteCode::val(2));
                     if let Some(jump_instruction) = skip_index {
-                        func.set_jump(jump_instruction, func.current_index());
+                        func.function
+                            .set_jump(jump_instruction, func.function.current_index());
                     }
 
-                    func.code.push(ByteCode::op(OpCode::Pop));
-                    func.code.push(ByteCode::op(OpCode::Pop));
+                    func.function.code.push(ByteCode::op(OpCode::Pop));
+                    func.function.code.push(ByteCode::op(OpCode::Pop));
                 }
             };
 
@@ -741,13 +796,15 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
         Expression::DivideTruncate { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::DivideTruncate));
+            func.function
+                .code
+                .push(ByteCode::op(OpCode::DivideTruncate));
             true
         }
         Expression::Exponent { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Exponent));
+            func.function.code.push(ByteCode::op(OpCode::Exponent));
             true
         }
         Expression::Compare {
@@ -757,68 +814,68 @@ fn linearize_expr(expr: Expression, func: &mut Function<()>, expand_stack: bool)
         } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Compare));
-            func.code.push(ByteCode { compare: operation });
+            func.function.code.push(ByteCode::op(OpCode::Compare));
+            func.function.code.push(ByteCode { compare: operation });
             true
         }
         Expression::And { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::And));
+            func.function.code.push(ByteCode::op(OpCode::And));
             true
         }
         Expression::Or { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.code.push(ByteCode::op(OpCode::Or));
+            func.function.code.push(ByteCode::op(OpCode::Or));
             true
         }
         Expression::FunctionDeclaration { params, body } => {
             let new_func = linearize(body, params);
             let index = func.sub_functions.len();
             func.sub_functions.push(new_func);
-            func.code.push(ByteCode::op(OpCode::PushFunction));
-            func.code.push(ByteCode::val(index));
+            func.function.code.push(ByteCode::op(OpCode::PushFunction));
+            func.function.code.push(ByteCode::val(index));
             true
         }
         Expression::Return { value } => {
             linearize_exp_ref(value, func, true);
-            func.code.push(ByteCode::op(OpCode::Return));
+            func.function.code.push(ByteCode::op(OpCode::Return));
             false
         }
         Expression::ListDeclaration { values } => {
             // TODO: Create List Object
-            func.code.push(ByteCode::op(OpCode::PushBuiltin));
-            let pool_index = func.add_reference(String::from("List"));
-            func.code.push(ByteCode::val(pool_index));
+            func.function.code.push(ByteCode::op(OpCode::PushBuiltin));
+            let pool_index = func.function.add_reference(String::from("List"));
+            func.function.code.push(ByteCode::val(pool_index));
             let num_values = values.len();
             values
                 .into_iter()
                 .for_each(|value| linearize_exp_ref(value, func, true));
-            func.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.code.push(ByteCode::val(num_values));
+            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
+            func.function.code.push(ByteCode::val(num_values));
             true
         }
         Expression::ListAccess { target, index } => {
             linearize_exp_ref(target, func, true);
-            func.code.push(ByteCode::op(OpCode::Duplicate));
-            func.code.push(ByteCode::op(OpCode::FieldAccess));
-            let pool_index = func.add_reference(String::from("@index_get"));
-            func.code.push(ByteCode::val(pool_index));
+            func.function.code.push(ByteCode::op(OpCode::Duplicate));
+            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+            let pool_index = func.function.add_reference(String::from("@index_get"));
+            func.function.code.push(ByteCode::val(pool_index));
             linearize_exp_ref(index, func, true);
-            func.code.push(ByteCode::op(OpCode::MethodCall));
-            func.code.push(ByteCode::val(1));
+            func.function.code.push(ByteCode::op(OpCode::MethodCall));
+            func.function.code.push(ByteCode::val(1));
             true
         }
     };
     match (expand_stack, created_value) {
         (true, false) => panic!(),
-        (false, true) => func.code.push(ByteCode::op(OpCode::Pop)),
+        (false, true) => func.function.code.push(ByteCode::op(OpCode::Pop)),
         _ => {}
     }
 }
 
-fn linearize_branch(branch: Branch, func: &mut Function<()>) {
+fn linearize_branch(branch: Branch, func: &mut BasicFunction) {
     match branch {
         Branch::WhileLoop { condition, body } => linearize_while(condition, body, func),
         Branch::IfElseBlock { conditions, last } => linearize_if_else(conditions, last, func),
@@ -841,82 +898,84 @@ fn linearize_compare(
     equal: u8,
     less: u8,
     body: Vec<ExpRef>,
-    func: &mut Function<()>,
+    func: &mut BasicFunction,
 ) {
     linearize_exp_ref(lhs, func, true);
     linearize_exp_ref(rhs, func, true);
-    func.code.push(ByteCode::op(OpCode::ComparisonJump));
-    let jump_table = func.current_index();
-    func.code.push(ByteCode::zero());
-    func.code.push(ByteCode::zero());
-    func.code.push(ByteCode::zero());
+    func.function
+        .code
+        .push(ByteCode::op(OpCode::ComparisonJump));
+    let jump_table = func.function.current_index();
+    func.function.code.push(ByteCode::zero());
+    func.function.code.push(ByteCode::zero());
+    func.function.code.push(ByteCode::zero());
     let indexes = body
         .into_iter()
         .map(|expr| {
-            let start_index = func.current_index();
-            func.code.push(ByteCode::op(OpCode::ScopeUp));
+            let start_index = func.function.current_index();
+            func.function.code.push(ByteCode::op(OpCode::ScopeUp));
             linearize_exp_ref(expr, func, false);
-            func.code.push(ByteCode::op(OpCode::ScopeDown));
-            let jump_out_index = func.place_jump(false);
+            func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+            let jump_out_index = func.function.place_jump(false);
             (start_index, jump_out_index)
         })
         .collect::<Vec<_>>();
-    func.code[jump_table + 0].value = indexes[greater as usize].0 as u64;
-    func.code[jump_table + 1].value = indexes[less as usize].0 as u64;
-    func.code[jump_table + 2].value = indexes[equal as usize].0 as u64;
-    let jump_out_to = func.current_index();
-    indexes
-        .into_iter()
-        .for_each(|(_, jump_out_index)| func.code[jump_out_index].value = jump_out_to as u64);
+    func.function.code[jump_table + 0].value = indexes[greater as usize].0 as u64;
+    func.function.code[jump_table + 1].value = indexes[less as usize].0 as u64;
+    func.function.code[jump_table + 2].value = indexes[equal as usize].0 as u64;
+    let jump_out_to = func.function.current_index();
+    indexes.into_iter().for_each(|(_, jump_out_index)| {
+        func.function.code[jump_out_index].value = jump_out_to as u64
+    });
 }
 
 fn linearize_if_else(
     conditions: Vec<ConditionBody>,
     last: Option<ExpRef>,
-    func: &mut Function<()>,
+    func: &mut BasicFunction,
 ) {
     let place_conditions = conditions
         .into_iter()
         .map(|ConditionBody { condition, body }| {
             linearize_exp_ref(condition, func, true);
-            let jump_index = func.place_jump(true);
+            let jump_index = func.function.place_jump(true);
             (jump_index, body)
         })
         .collect::<Vec<_>>();
     if let Some(else_expr) = last {
-        func.code.push(ByteCode::op(OpCode::ScopeUp));
+        func.function.code.push(ByteCode::op(OpCode::ScopeUp));
         linearize_exp_ref(else_expr, func, false);
-        func.code.push(ByteCode::op(OpCode::ScopeDown));
+        func.function.code.push(ByteCode::op(OpCode::ScopeDown));
     }
-    let jump_to_end_index = func.place_jump(false);
+    let jump_to_end_index = func.function.place_jump(false);
     let place_bodies = place_conditions
         .into_iter()
         .map(|(jump_index, body)| {
-            let jump_to = func.current_index();
-            func.set_jump(jump_index, jump_to);
-            func.code.push(ByteCode::op(OpCode::ScopeUp));
+            let jump_to = func.function.current_index();
+            func.function.set_jump(jump_index, jump_to);
+            func.function.code.push(ByteCode::op(OpCode::ScopeUp));
             linearize_exp_ref(body, func, false);
-            func.code.push(ByteCode::op(OpCode::ScopeDown));
-            let jump_to_end_index = func.place_jump(false);
+            func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+            let jump_to_end_index = func.function.place_jump(false);
             jump_to_end_index
         })
         .collect::<Vec<_>>();
-    let jump_to = func.current_index();
+    let jump_to = func.function.current_index();
     place_bodies.into_iter().for_each(|jump_index| {
-        func.set_jump(jump_index, jump_to);
+        func.function.set_jump(jump_index, jump_to);
     });
-    func.set_jump(jump_to_end_index, jump_to);
+    func.function.set_jump(jump_to_end_index, jump_to);
 }
 
-fn linearize_while(condition: ExpRef, body: ExpRef, func: &mut Function<()>) {
-    let begin_index = func.current_index();
+fn linearize_while(condition: ExpRef, body: ExpRef, func: &mut BasicFunction) {
+    let begin_index = func.function.current_index();
     linearize_exp_ref(condition, func, true);
-    func.code.push(ByteCode::op(OpCode::Negate));
-    let condition_jump_index = func.place_jump(true);
-    func.code.push(ByteCode::op(OpCode::ScopeUp));
+    func.function.code.push(ByteCode::op(OpCode::Negate));
+    let condition_jump_index = func.function.place_jump(true);
+    func.function.code.push(ByteCode::op(OpCode::ScopeUp));
     linearize_exp_ref(body, func, false);
-    func.code.push(ByteCode::op(OpCode::ScopeDown));
-    func.place_jump_to(false, begin_index);
-    let end_index = func.current_index();
-    func.set_jump(condition_jump_index, end_index);
+    func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+    func.function.place_jump_to(false, begin_index);
+    let end_index = func.function.current_index();
+    func.function.set_jump(condition_jump_index, end_index);
 }

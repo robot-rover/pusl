@@ -3,7 +3,7 @@ use std::thread::LocalKey;
 
 use garbage::{GcPointer, ManagedPool};
 
-use crate::backend::linearize::{resolve, ByteCodeFile, Function, OpCode};
+use crate::backend::linearize::ByteCodeFile;
 use crate::backend::object::{Object, ObjectPtr, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
@@ -20,8 +20,7 @@ pub mod list;
 pub mod object;
 
 use debug::{DebugCommand, DebugResponse};
-
-pub type RFunction = Function<&'static Vec<(String, ObjectPtr)>>;
+use linearize::{OpCode, ResolvedFunction};
 
 #[derive(Debug)]
 enum VariableStack {
@@ -37,38 +36,38 @@ struct Variable {
 
 struct StackFrame {
     this_obj: Option<GcPointer<RefCell<Object>>>,
-    function: &'static RFunction,
+    rfunc: &'static ResolvedFunction,
     variables: Vec<VariableStack>,
     op_stack: Vec<Value>,
     index: usize,
 }
 
 impl StackFrame {
-    fn from_function(function: &'static RFunction) -> Self {
+    fn from_function(rfunc: &'static ResolvedFunction) -> Self {
         StackFrame {
             this_obj: None,
-            function,
+            rfunc,
             variables: vec![],
             op_stack: vec![],
             index: 0,
         }
     }
 
-    fn from_method(function: &'static RFunction, this_obj: ObjectPtr) -> Self {
+    fn from_method(rfunc: &'static ResolvedFunction, this_obj: ObjectPtr) -> Self {
         StackFrame {
             this_obj: Some(this_obj),
-            function,
+            rfunc,
             variables: vec![],
             op_stack: vec![],
             index: 0,
         }
     }
 
-    fn from_file(function: &'static RFunction) -> (Self, ObjectPtr) {
+    fn from_file(rfunc: &'static ResolvedFunction) -> (Self, ObjectPtr) {
         let new_object = GC.with(|gc| gc.borrow_mut().place_in_heap(Object::new()));
         let frame = StackFrame {
             this_obj: Some(new_object.clone()),
-            function,
+            rfunc,
             variables: vec![],
             op_stack: vec![],
             index: 0,
@@ -77,25 +76,25 @@ impl StackFrame {
     }
 
     pub fn get_code(&mut self) -> Option<OpCode> {
-        let code = self.function.get_code(self.index);
+        let code = self.rfunc.function.get_code(self.index);
         self.index += 1;
         code
     }
 
     pub fn get_val(&mut self) -> usize {
-        let value = self.function.get_val(self.index);
+        let value = self.rfunc.function.get_val(self.index);
         self.index += 1;
         value
     }
 
     pub fn get_cmp(&mut self) -> Compare {
-        let value = self.function.get_cmp(self.index);
+        let value = self.rfunc.function.get_cmp(self.index);
         self.index += 1;
         value
     }
 
     pub fn get_assign_type(&mut self) -> bool {
-        let value = self.function.get_assign_type(self.index);
+        let value = self.rfunc.function.get_assign_type(self.index);
         self.index += 1;
         value
     }
@@ -123,8 +122,8 @@ fn process_bcf(bcf: ByteCodeFile, resolved_imports: &mut Vec<(PathBuf, ObjectPtr
         base_func,
         imports,
     } = bcf;
-    let base_func = resolve(base_func, resolved_imports as &_, imports, &GC);
-    let (current_frame, import_object) = StackFrame::from_file(base_func);
+    let rfunc = base_func.resolve(resolved_imports as &_, imports, &GC);
+    let (current_frame, import_object) = StackFrame::from_file(rfunc);
     resolved_imports.push((file, import_object));
     current_frame
 }
@@ -172,7 +171,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
         if let Some(index) = stop_index {
             if current_frame.index >= index {
                 if let Some(tuple) = &mut debug {
-                    let operation = current_frame.function.code.get(current_frame.index);
+                    let operation = current_frame.rfunc.function.code.get(current_frame.index);
                     if let Some(code) = operation {
                         println!("{}: {:?}", current_frame.index, code.as_op());
                     }
@@ -234,6 +233,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let pool_index = current_frame.get_val();
                 current_frame.op_stack.push(
                     current_frame
+                        .rfunc
                         .function
                         .get_literal(pool_index)
                         .into_value(&GC),
@@ -248,7 +248,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
             OpCode::PushReference => {
                 let pool_index = current_frame.get_val();
-                let reference_name = current_frame.function.get_reference(pool_index);
+                let reference_name = current_frame.rfunc.function.get_reference(pool_index);
                 let value = current_frame
                     .variables
                     .iter_mut()
@@ -264,8 +264,8 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .map(|var| var.value.clone())
                     .or_else(|| {
                         current_frame
-                            .function
-                            .resolved
+                            .rfunc
+                            .imports
                             .iter()
                             .find(|&(name, _)| name.as_str() == reference_name)
                             .map(|(_, obj)| Value::Object(obj.clone()))
@@ -277,7 +277,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             OpCode::PushFunction => {
                 let pool_index = current_frame.get_val();
                 current_frame.op_stack.push(Value::Function(
-                    current_frame.function.get_function(pool_index),
+                    current_frame.rfunc.get_function(pool_index),
                 ));
             }
             OpCode::FunctionCall => {
@@ -288,10 +288,10 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let function = current_frame.op_stack.pop().unwrap();
                 match function {
                     Value::Function(reference) => {
-                        assert_eq!(reference.args.len(), args.len());
+                        assert_eq!(reference.function.args.len(), args.len());
                         let mut arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_function(reference);
-                        for name in reference.args.iter().cloned() {
+                        for name in reference.function.args.iter().cloned() {
                             let value = arg_value_iter
                                 .next()
                                 .expect("Wrong Number of arguments for function");
@@ -319,14 +319,14 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let value = current_frame.op_stack.pop().unwrap();
                 match function {
                     Value::Function(reference) => {
-                        assert_eq!(reference.args.len(), args.len());
+                        assert_eq!(reference.function.args.len(), args.len());
                         let this_obj = if let Value::Object(ptr) = value {
                             ptr
                         } else {
                             panic!("Cannot call method on Non Object")
                         };
                         let mut new_frame = StackFrame::from_method(reference, this_obj);
-                        for name in reference.args.iter().cloned() {
+                        for name in reference.function.args.iter().cloned() {
                             let value = args.pop().expect("Wrong Number of arguments for function");
                             new_frame
                                 .variables
@@ -346,7 +346,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             OpCode::FieldAccess => {
                 let value = current_frame.op_stack.pop().unwrap();
                 let name_index = current_frame.get_val();
-                let name = current_frame.function.get_reference(name_index);
+                let name = current_frame.rfunc.function.get_reference(name_index);
                 let value = match value {
                     Value::Object(object) => Object::get_field(object, name.as_str()),
                     Value::String(_) => unimplemented!(),
@@ -466,7 +466,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
             OpCode::AssignReference => {
                 let pool_index = current_frame.get_val();
-                let reference_name = current_frame.function.get_reference(pool_index);
+                let reference_name = current_frame.rfunc.function.get_reference(pool_index);
                 let is_let = current_frame.get_assign_type();
                 let value = current_frame.op_stack.pop().unwrap();
                 if is_let {
@@ -495,7 +495,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
             OpCode::AssignField => {
                 let pool_index = current_frame.get_val();
-                let reference_name = current_frame.function.get_reference(pool_index);
+                let reference_name = current_frame.rfunc.function.get_reference(pool_index);
                 let is_let = current_frame.get_assign_type();
                 let value = current_frame.op_stack.pop().unwrap();
                 let object = if let Value::Object(ptr) = current_frame.op_stack.pop().unwrap() {
@@ -524,7 +524,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
             OpCode::PushBuiltin => {
                 let pool_index = current_frame.get_val();
-                let reference_name = current_frame.function.get_reference(pool_index);
+                let reference_name = current_frame.rfunc.function.get_reference(pool_index);
                 let builtin = builtins
                     .get(reference_name.as_str())
                     .expect("Missing Builtin")

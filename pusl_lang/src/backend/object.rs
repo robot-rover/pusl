@@ -1,5 +1,5 @@
+use crate::backend::linearize::ResolvedFunction;
 use crate::backend::GcPoolRef;
-use crate::backend::RFunction;
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
@@ -20,7 +20,7 @@ pub enum Value {
     Integer(i64),
     Float(f64),
     String(StringPtr),
-    Function(&'static RFunction),
+    Function(&'static ResolvedFunction),
     Native(NativeFn),
     Object(ObjectPtr),
 }
@@ -55,7 +55,7 @@ value_try_from!(bool, Value::Boolean);
 value_try_from!(i64, Value::Integer);
 value_try_from!(f64, Value::Float);
 value_try_from!(StringPtr, Value::String);
-value_try_from!(&'static RFunction, Value::Function);
+value_try_from!(&'static ResolvedFunction, Value::Function);
 value_try_from!(NativeFn, Value::Native);
 value_try_from!(ObjectPtr, Value::Object);
 
