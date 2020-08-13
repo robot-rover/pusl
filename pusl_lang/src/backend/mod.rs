@@ -289,12 +289,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 match function {
                     Value::Function(reference) => {
                         assert_eq!(reference.function.args.len(), args.len());
-                        let mut arg_value_iter = args.into_iter();
+                        let arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_function(reference);
-                        for name in reference.function.args.iter().cloned() {
-                            let value = arg_value_iter
-                                .next()
-                                .expect("Wrong Number of arguments for function");
+                        for (name, value) in reference.function.args.iter().cloned().zip(arg_value_iter) {
                             new_frame
                                 .variables
                                 .push(VariableStack::Variable(Variable { value, name }));
@@ -311,10 +308,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
             OpCode::MethodCall => {
                 let num_args = current_frame.get_val();
-                let mut args = Vec::with_capacity(num_args);
-                for _ in 0..num_args {
-                    args.push(current_frame.op_stack.pop().unwrap());
-                }
+                assert!(current_frame.op_stack.len() >= num_args);
+                let split_off_index = current_frame.op_stack.len() - num_args;
+                let args = current_frame.op_stack.split_off(split_off_index);
                 let function = current_frame.op_stack.pop().unwrap();
                 let value = current_frame.op_stack.pop().unwrap();
                 match function {
@@ -325,14 +321,13 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         } else {
                             panic!("Cannot call method on Non Object")
                         };
+                        let arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_method(reference, this_obj);
-                        for name in reference.function.args.iter().cloned() {
-                            let value = args.pop().expect("Wrong Number of arguments for function");
+                        for (name, value) in reference.function.args.iter().cloned().zip(arg_value_iter) {
                             new_frame
                                 .variables
                                 .push(VariableStack::Variable(Variable { value, name }));
                         }
-                        assert!(args.is_empty(), "Wrong number of arguments for function");
                         let old_frame = std::mem::replace(&mut current_frame, new_frame);
                         ex_stack.push(old_frame);
                     }
