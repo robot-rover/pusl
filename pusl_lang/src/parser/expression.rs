@@ -112,6 +112,7 @@ pub enum Expression {
     },
 
     FunctionDeclaration {
+        binds: Vec<String>,
         params: Vec<String>,
         body: ExpRef,
     },

@@ -1,6 +1,6 @@
 extern crate pusl_lang;
 
-use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile, Function};
+use pusl_lang::backend::linearize::linearize_file;
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;

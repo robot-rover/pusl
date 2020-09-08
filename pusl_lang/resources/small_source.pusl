@@ -29,5 +29,8 @@ if f == 0:
  i = 1
 
 let test = Object()
-let test.fun = fn(a, b, arg):
+let counter = Object()
+let counter.acc = 0
+let test.fun = fn[counter](a, b, arg):
+ counter.acc = counter.acc + 1
  return arg(a, b)

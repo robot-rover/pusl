@@ -1,4 +1,4 @@
-use crate::backend::linearize::ResolvedFunction;
+use super::BoundFunction;
 use crate::backend::GcPoolRef;
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
@@ -12,6 +12,7 @@ use typemap::TypeMap;
 pub type ObjectPtr = GcPointer<RefCell<Object>>;
 pub type StringPtr = GcPointer<String>;
 pub type NativeFn = fn(Vec<Value>, Option<Value>, GcPoolRef) -> Value;
+pub type FnPtr = GcPointer<BoundFunction>;
 
 #[derive(Clone, Debug)]
 pub enum Value {
@@ -20,7 +21,7 @@ pub enum Value {
     Integer(i64),
     Float(f64),
     String(StringPtr),
-    Function(&'static ResolvedFunction),
+    Function(FnPtr),
     Native(NativeFn),
     Object(ObjectPtr),
 }
@@ -55,7 +56,7 @@ value_try_from!(bool, Value::Boolean);
 value_try_from!(i64, Value::Integer);
 value_try_from!(f64, Value::Float);
 value_try_from!(StringPtr, Value::String);
-value_try_from!(&'static ResolvedFunction, Value::Function);
+value_try_from!(FnPtr, Value::Function);
 value_try_from!(NativeFn, Value::Native);
 value_try_from!(ObjectPtr, Value::Object);
 
@@ -67,7 +68,7 @@ impl Display for Value {
             Value::Integer(val) => write!(f, "{}", val)?,
             Value::Float(val) => write!(f, "{}", val)?,
             Value::String(val) => write!(f, "{}", **val)?,
-            Value::Function(val) => write!(f, "Function {:p}", (*val) as *const _)?,
+            Value::Function(val) => write!(f, "Function {:?}", val)?,
             Value::Native(val) => write!(f, "NativeFunc {:p}", *val)?,
             Value::Object(val) => {
                 write!(f, "Object ")?;

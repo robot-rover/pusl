@@ -38,3 +38,17 @@ let test.field = 83.4
 test.field = "Crazy Horse"
 let test.prin = print
 test.prin(test.field, " | ", test, "\n")
+
+let answer = 41
+answer = answer + 1
+let get_answer = fn[answer]():
+    return answer
+
+let echo = Object()
+let echo.value = 0
+let test = fn[echo](value):
+    echo.value = value
+
+test(2)
+print(echo.value, "\n")
+print("A", "B", "\n")

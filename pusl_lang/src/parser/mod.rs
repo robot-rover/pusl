@@ -318,11 +318,16 @@ fn parse_function_declaration(block: Block) -> Expression {
 
             let mut rhs_iter = rhs.iter().cloned();
             assert_eq!(Some(Token::Keyword(Keyword::Fn)), rhs_iter.next());
-            assert_eq!(
-                Some(Token::Symbol(Symbol::OpenParenthesis)),
-                rhs_iter.next()
-            );
-            let parameters = parse_function_parameters(&mut rhs_iter);
+            let mut open_symbol = rhs_iter.next().unwrap();
+            let binds = if let Token::Symbol(Symbol::OpenSquareBracket) = open_symbol {
+                let binds = parse_function_parameters(&mut rhs_iter, Symbol::CloseSquareBracket);
+                open_symbol = rhs_iter.next().unwrap();
+                binds
+            } else {
+                Vec::new()
+            };
+            assert_eq!(Token::Symbol(Symbol::OpenParenthesis), open_symbol);
+            let parameters = parse_function_parameters(&mut rhs_iter, Symbol::CloseParenthesis);
             assert_eq!(None, rhs_iter.next());
 
             let mut flags = AssignmentFlags::empty();
@@ -332,13 +337,17 @@ fn parse_function_declaration(block: Block) -> Expression {
             if kind == Symbol::ConditionalAssignment {
                 flags |= AssignmentFlags::CONDITIONAL;
             }
-            (target, flags, parameters)
+            (target, flags, binds, parameters)
         } else {
             panic!("Function declaration without assignment")
         }
     };
-    let ((target, flags, params), body) = parse_condition_body(block, &mut declaration_func);
-    let decl_expr = Expression::FunctionDeclaration { params, body };
+    let ((target, flags, binds, params), body) = parse_condition_body(block, &mut declaration_func);
+    let decl_expr = Expression::FunctionDeclaration {
+        binds,
+        params,
+        body,
+    };
     let decl_expr = Box::new(Eval::Expression(decl_expr));
 
     Expression::Assigment {
@@ -477,17 +486,31 @@ fn parse_inside_enclosure(
 }
 
 // Returns a Function Call expression with a null target field
-fn parse_function_parameters(tokens: &mut dyn Iterator<Item = Token>) -> Vec<String> {
+fn parse_function_parameters(
+    tokens: &mut dyn Iterator<Item = Token>,
+    close_symbol: Symbol,
+) -> Vec<String> {
     let mut parameters = Vec::new();
     while let Some(parameter) = tokens.next() {
         if let Token::Reference(name) = parameter {
             parameters.push(name);
         } else {
+            if let Token::Symbol(symbol) = parameter {
+                if symbol == close_symbol {
+                    return Vec::new();
+                }
+            }
             panic!("Expected Function Parameter Name")
         }
         match tokens.next() {
             Some(Token::Symbol(Symbol::Comma)) => {}
-            Some(Token::Symbol(Symbol::CloseParenthesis)) => break,
+            Some(Token::Symbol(symbol)) => {
+                if symbol == close_symbol {
+                    break;
+                } else {
+                    panic!("Expected Comma or Closing Parenthesis")
+                }
+            }
             Some(_) => panic!("Expected Comma or Closing Parenthesis"),
             None => panic!("Unexpected End of Line"),
         }

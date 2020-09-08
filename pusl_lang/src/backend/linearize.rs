@@ -1,19 +1,19 @@
+use crate::backend::object::{FnPtr, Value};
 use crate::backend::object::{Object, ObjectPtr};
+use crate::backend::BoundFunction;
+use crate::backend::GcPoolRef;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
-use garbage::ManagedPool;
 use pad_adapter::PadAdapter;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
-use std::thread::LocalKey;
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -21,7 +21,7 @@ pub enum OpCode {
     Modulus,       // 2 Stack Values
     Literal,       // 1 ByteCode Value (index of literal pool)
     PushReference, // 1 ByteCode Value (index of reference pool)
-    PushFunction,  //  1 ByteCode Value (index of sub-function pool)
+    PushFunction,  //  1 ByteCode Value (index of sub-function pool) (also bind)
     PushSelf,
     FunctionCall, // n + 1 Stack Values (bottom is reference to function) (first opcode is n)
     MethodCall, // n + 2 Stack Values (bottom is self, then function, then n arguments) first opcode is n
@@ -190,8 +190,8 @@ impl Debug for ResolvedFunction {
             }
             write!(f, "\nSub-Functions:")?;
             for (index, sub_fn) in self.sub_functions.iter().enumerate() {
-                write!(f, "\n{:4}:", index)?;
-                let mut adapter = PadAdapter::new(f);
+                writeln!(f, "\n+{:->4}:", index)?;
+                let mut adapter = PadAdapter::with_padding(f, "|   ");
                 write!(adapter, "{:#?}", sub_fn)?;
             }
             Ok(())
@@ -203,11 +203,20 @@ impl ResolvedFunction {
     pub fn get_function(&self, pool_index: usize) -> &ResolvedFunction {
         &self.sub_functions[pool_index]
     }
+
+    pub fn bind(&'static self, bound_values: Vec<Value>, gc: GcPoolRef) -> FnPtr {
+        let bfunc = BoundFunction {
+            target: self,
+            bound_values,
+        };
+        gc.with(|gc| gc.borrow_mut().place_in_heap(bfunc))
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Function {
     pub args: Vec<String>,
+    pub binds: Vec<String>,
     literals: Vec<Literal>,
     references: Vec<String>,
     pub(crate) code: Vec<ByteCode>,
@@ -228,8 +237,8 @@ impl Debug for BasicFunction {
             self.function.fmt(f)?;
             write!(f, "\nSub-Functions:")?;
             for (index, sub_fn) in self.sub_functions.iter().enumerate() {
-                writeln!(f, "\n{:4}:", index)?;
-                let mut adapter = PadAdapter::new(f);
+                writeln!(f, "\n+{:->4}:", index)?;
+                let mut adapter = PadAdapter::with_padding(f, "|   ");
                 write!(adapter, "{:#?}", sub_fn)?;
             }
             Ok(())
@@ -251,7 +260,7 @@ impl BasicFunction {
         self,
         global_imports: I,
         target_imports: Vec<Import>,
-        gc: &'static LocalKey<RefCell<ManagedPool>>,
+        gc: GcPoolRef,
     ) -> &'static ResolvedFunction
     where
         I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
@@ -549,9 +558,10 @@ impl Function {
         self.code.len()
     }
 
-    fn new(args: Vec<String>) -> Self {
+    fn new(args: Vec<String>, binds: Vec<String>) -> Function {
         Function {
             args,
+            binds,
             literals: vec![],
             references: vec![],
             code: vec![],
@@ -561,7 +571,7 @@ impl Function {
 
 pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
     let ParsedFile { expr, imports } = file;
-    let func = linearize(expr, vec![]);
+    let func = linearize(expr, vec![], vec![]);
     ByteCodeFile {
         file: path,
         base_func: func,
@@ -569,8 +579,8 @@ pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
     }
 }
 
-fn linearize(expr: ExpRef, args: Vec<String>) -> BasicFunction {
-    let code = Function::new(args);
+fn linearize(expr: ExpRef, args: Vec<String>, binds: Vec<String>) -> BasicFunction {
+    let code = Function::new(args, binds);
     let mut function = BasicFunction::from(code);
     linearize_exp_ref(expr, &mut function, false);
 
@@ -830,8 +840,12 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             func.function.code.push(ByteCode::op(OpCode::Or));
             true
         }
-        Expression::FunctionDeclaration { params, body } => {
-            let new_func = linearize(body, params);
+        Expression::FunctionDeclaration {
+            binds,
+            params,
+            body,
+        } => {
+            let new_func = linearize(body, params, binds);
             let index = func.sub_functions.len();
             func.sub_functions.push(new_func);
             func.function.code.push(ByteCode::op(OpCode::PushFunction));
