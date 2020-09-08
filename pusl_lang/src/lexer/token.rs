@@ -145,6 +145,7 @@ pub enum Keyword {
     Fn,
     Import,
     As,
+    Yield,
 }
 
 #[derive(Debug, PartialEq, Clone)]

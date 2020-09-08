@@ -169,6 +169,12 @@ fn process_bcf(bcf: ByteCodeFile, resolved_imports: &mut Vec<(PathBuf, ObjectPtr
 
 type DebugTuple = (Receiver<DebugCommand>, Sender<DebugResponse>);
 
+struct ExecutionState {
+    imports: Vec<(PathBuf, ObjectPtr)>,
+    execution_stack: Vec<StackFrame>,
+    current_frame: StackFrame,
+}
+
 pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTuple>) {
     let mut stop_index = None;
     if let Some(tuple) = &mut debug {
@@ -202,25 +208,31 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
         index += 1;
     }
 
-    let mut ex_stack = Vec::<StackFrame>::new();
     let top = resolve_stack.pop().unwrap();
-    let mut current_frame = process_bcf(top, &mut resolved_imports);
+    let current_frame = process_bcf(top, &mut resolved_imports);
+
+    let mut state = ExecutionState {
+        imports: resolved_imports,
+        execution_stack: Vec::new(),
+        current_frame,
+    };
 
     loop {
         if let Some(index) = stop_index {
-            if current_frame.index >= index {
+            if state.current_frame.index >= index {
                 if let Some(tuple) = &mut debug {
-                    let operation = current_frame
+                    let operation = state
+                        .current_frame
                         .bfunc
                         .target
                         .function
                         .code
-                        .get(current_frame.index);
+                        .get(state.current_frame.index);
                     if let Some(code) = operation {
-                        println!("{}: {:?}", current_frame.index, code.as_op());
+                        println!("{}: {:?}", state.current_frame.index, code.as_op());
                     }
                     println!("Variables: ");
-                    for variable in &current_frame.variables {
+                    for variable in &state.current_frame.variables {
                         match variable {
                             VariableStack::Variable(Variable { name, value }) => {
                                 println!("\t{}: {:?}", name, value)
@@ -229,12 +241,12 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         }
                     }
                     println!("Stack: ");
-                    for value in &current_frame.op_stack {
+                    for value in &state.current_frame.op_stack {
                         println!("\t{:?}", value);
                     }
                     tuple
                         .1
-                        .send(DebugResponse::Paused(current_frame.index))
+                        .send(DebugResponse::Paused(state.current_frame.index))
                         .unwrap();
                     match tuple.0.recv().unwrap() {
                         DebugCommand::RunToIndex(index) => stop_index = Some(index),
@@ -243,18 +255,18 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 }
             }
         }
-        let current_op = if let Some(op) = current_frame.get_code() {
+        let current_op = if let Some(op) = state.current_frame.get_code() {
             if debug.is_some() {
-                trace!("{}: {:?}", current_frame.index - 1, op);
+                trace!("{}: {:?}", state.current_frame.index - 1, op);
             }
             op
         } else {
-            if let Some(mut parent_frame) = ex_stack.pop() {
+            if let Some(mut parent_frame) = state.execution_stack.pop() {
                 parent_frame.op_stack.push(Value::Null);
-                current_frame = parent_frame;
+                state.current_frame = parent_frame;
                 continue;
             } else if let Some(parent_frame) = resolve_stack.pop() {
-                current_frame = process_bcf(parent_frame, &mut resolved_imports);
+                state.current_frame = process_bcf(parent_frame, &mut state.imports);
                 continue;
             } else {
                 if let Some(tuple) = &mut debug {
@@ -265,18 +277,19 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
         };
         // TODO:
         // if DEBUG {
-        //     write_bytecode_line((current_frame.index, &ByteCode::op(current_op)), &mut stdout_handle, &mut current_frame.function.code[current_frame.index..], current_frame.function)
+        //     write_bytecode_line((current_frame.index, &ByteCode::op(current_op)), &mut stdout_handle, &mut state.current_frame.function.code[current_frame.index..], state.current_frame.function)
         // }
         match current_op {
             OpCode::Modulus => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(modulus(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(modulus(lhs, rhs));
             }
             OpCode::Literal => {
-                let pool_index = current_frame.get_val();
-                current_frame.op_stack.push(
-                    current_frame
+                let pool_index = state.current_frame.get_val();
+                state.current_frame.op_stack.push(
+                    state
+                        .current_frame
                         .bfunc
                         .target
                         .function
@@ -285,20 +298,23 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 )
             }
             OpCode::PushSelf => {
-                let self_ref = current_frame
+                let self_ref = state
+                    .current_frame
                     .this_obj
                     .clone()
                     .expect("Cannot reference self");
-                current_frame.op_stack.push(Value::Object(self_ref));
+                state.current_frame.op_stack.push(Value::Object(self_ref));
             }
             OpCode::PushReference => {
-                let pool_index = current_frame.get_val();
-                let reference_name = current_frame
+                let pool_index = state.current_frame.get_val();
+                let reference_name = state
+                    .current_frame
                     .bfunc
                     .target
                     .function
                     .get_reference(pool_index);
-                let value = current_frame
+                let value = state
+                    .current_frame
                     .variables
                     .iter_mut()
                     .rev()
@@ -312,17 +328,19 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .find(|var| var.name == reference_name)
                     .map(|var| var.value.clone())
                     .or_else(|| {
-                        current_frame
+                        state
+                            .current_frame
                             .bfunc
                             .target
                             .function
                             .binds
                             .iter()
                             .position(|name| name == &reference_name)
-                            .map(|index| current_frame.bfunc.bound_values[index].clone())
+                            .map(|index| state.current_frame.bfunc.bound_values[index].clone())
                     })
                     .or_else(|| {
-                        current_frame
+                        state
+                            .current_frame
                             .bfunc
                             .target
                             .imports
@@ -332,17 +350,18 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     })
                     .or_else(|| builtins.get(reference_name.as_str()).cloned())
                     .expect(format!("Undeclared Variable \"{}\"", reference_name).as_str());
-                current_frame.op_stack.push(value);
+                state.current_frame.op_stack.push(value);
             }
             OpCode::PushFunction => {
-                let pool_index = current_frame.get_val();
-                let rfunc = current_frame.bfunc.target.get_function(pool_index);
+                let pool_index = state.current_frame.get_val();
+                let rfunc = state.current_frame.bfunc.target.get_function(pool_index);
                 let bound_values = rfunc
                     .function
                     .binds
                     .iter()
                     .map(|name| {
-                        current_frame
+                        state
+                            .current_frame
                             .variables
                             .iter_mut()
                             .rev()
@@ -361,41 +380,49 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
 
                 let bfunc = rfunc.bind(bound_values, &GC);
 
-                current_frame.op_stack.push(Value::Function(bfunc));
+                state.current_frame.op_stack.push(Value::Function(bfunc));
             }
             OpCode::FunctionCall => {
-                let num_args = current_frame.get_val();
-                assert!(current_frame.op_stack.len() >= num_args);
-                let split_off_index = current_frame.op_stack.len() - num_args;
-                let args = current_frame.op_stack.split_off(split_off_index);
-                let function = current_frame.op_stack.pop().unwrap();
+                let num_args = state.current_frame.get_val();
+                assert!(state.current_frame.op_stack.len() >= num_args);
+                let split_off_index = state.current_frame.op_stack.len() - num_args;
+                let args = state.current_frame.op_stack.split_off(split_off_index);
+                let function = state.current_frame.op_stack.pop().unwrap();
                 match function {
                     Value::Function(reference) => {
                         assert_eq!(reference.target.function.args.len(), args.len());
                         let arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_function(reference);
-                        for (name, value) in new_frame.bfunc.target.function.args.iter().cloned().zip(arg_value_iter) {
+                        for (name, value) in new_frame
+                            .bfunc
+                            .target
+                            .function
+                            .args
+                            .iter()
+                            .cloned()
+                            .zip(arg_value_iter)
+                        {
                             new_frame
                                 .variables
                                 .push(VariableStack::Variable(Variable { value, name }));
                         }
-                        let old_frame = std::mem::replace(&mut current_frame, new_frame);
-                        ex_stack.push(old_frame);
+                        let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
+                        state.execution_stack.push(old_frame);
                     }
                     Value::Native(ptr) => {
                         let result = ptr(args, None, &GC);
-                        current_frame.op_stack.push(result);
+                        state.current_frame.op_stack.push(result);
                     }
                     _ => panic!("Value must be a function to call"),
                 };
             }
             OpCode::MethodCall => {
-                let num_args = current_frame.get_val();
-                assert!(current_frame.op_stack.len() >= num_args);
-                let split_off_index = current_frame.op_stack.len() - num_args;
-                let args = current_frame.op_stack.split_off(split_off_index);
-                let function = current_frame.op_stack.pop().unwrap();
-                let value = current_frame.op_stack.pop().unwrap();
+                let num_args = state.current_frame.get_val();
+                assert!(state.current_frame.op_stack.len() >= num_args);
+                let split_off_index = state.current_frame.op_stack.len() - num_args;
+                let args = state.current_frame.op_stack.split_off(split_off_index);
+                let function = state.current_frame.op_stack.pop().unwrap();
+                let value = state.current_frame.op_stack.pop().unwrap();
                 match function {
                     Value::Function(reference) => {
                         assert_eq!(reference.target.function.args.len(), args.len());
@@ -406,25 +433,34 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         };
                         let arg_value_iter = args.into_iter();
                         let mut new_frame = StackFrame::from_method(reference, this_obj);
-                        for (name, value) in new_frame.bfunc.target.function.args.iter().cloned().zip(arg_value_iter) {
+                        for (name, value) in new_frame
+                            .bfunc
+                            .target
+                            .function
+                            .args
+                            .iter()
+                            .cloned()
+                            .zip(arg_value_iter)
+                        {
                             new_frame
                                 .variables
                                 .push(VariableStack::Variable(Variable { value, name }));
                         }
-                        let old_frame = std::mem::replace(&mut current_frame, new_frame);
-                        ex_stack.push(old_frame);
+                        let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
+                        state.execution_stack.push(old_frame);
                     }
                     Value::Native(ptr) => {
                         let result = ptr(args, Some(value), &GC);
-                        current_frame.op_stack.push(result);
+                        state.current_frame.op_stack.push(result);
                     }
                     _ => panic!("Value must be a function to call"),
                 };
             }
             OpCode::FieldAccess => {
-                let value = current_frame.op_stack.pop().unwrap();
-                let name_index = current_frame.get_val();
-                let name = current_frame
+                let value = state.current_frame.op_stack.pop().unwrap();
+                let name_index = state.current_frame.get_val();
+                let name = state
+                    .current_frame
                     .bfunc
                     .target
                     .function
@@ -434,136 +470,146 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     Value::String(_) => unimplemented!(),
                     _ => panic!("Cannot access field of this value"),
                 };
-                current_frame.op_stack.push(value);
+                state.current_frame.op_stack.push(value);
             }
             OpCode::Addition => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(addition(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(addition(lhs, rhs));
             }
             OpCode::Subtraction => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(subtraction(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(subtraction(lhs, rhs));
             }
             OpCode::Negate => {
-                let operand = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(negate(operand));
+                let operand = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(negate(operand));
             }
             OpCode::Multiply => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(multiplication(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(multiplication(lhs, rhs));
             }
             OpCode::Divide => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(division(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(division(lhs, rhs));
             }
             OpCode::DivideTruncate => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(truncate_division(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state
+                    .current_frame
+                    .op_stack
+                    .push(truncate_division(lhs, rhs));
             }
             OpCode::Exponent => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(exponent(lhs, rhs));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(exponent(lhs, rhs));
             }
             OpCode::Compare => {
-                let op = current_frame.get_cmp();
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(compare(lhs, rhs, op));
+                let op = state.current_frame.get_cmp();
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(compare(lhs, rhs, op));
             }
             OpCode::And => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(logic(lhs, rhs, true));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(logic(lhs, rhs, true));
             }
             OpCode::Or => {
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
-                current_frame.op_stack.push(logic(lhs, rhs, false));
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.push(logic(lhs, rhs, false));
             }
             OpCode::ScopeUp => {
-                current_frame.variables.push(VariableStack::ScopeBoundary);
+                state
+                    .current_frame
+                    .variables
+                    .push(VariableStack::ScopeBoundary);
             }
             OpCode::ScopeDown => {
-                while let Some(VariableStack::Variable(_)) = current_frame.variables.pop() {}
+                while let Some(VariableStack::Variable(_)) = state.current_frame.variables.pop() {}
             }
             OpCode::Return => {
-                let return_value = current_frame.op_stack.pop().unwrap();
-                if let Some(mut parent_frame) = ex_stack.pop() {
+                let return_value = state.current_frame.op_stack.pop().unwrap();
+                if let Some(mut parent_frame) = state.execution_stack.pop() {
                     parent_frame.op_stack.push(return_value);
-                    current_frame = parent_frame;
+                    state.current_frame = parent_frame;
                     continue;
                 } else if let Some(parent_frame) = resolve_stack.pop() {
-                    current_frame = process_bcf(parent_frame, &mut resolved_imports);
+                    state.current_frame = process_bcf(parent_frame, &mut state.imports);
                     continue;
                 } else {
                     return;
                 }
             }
             OpCode::ConditionalJump => {
-                let jump_index = current_frame.get_val();
-                let condition = if let Value::Boolean(val) = current_frame.op_stack.pop().unwrap() {
-                    val
-                } else {
-                    panic!("ConditionalJump expects boolean");
-                };
+                let jump_index = state.current_frame.get_val();
+                let condition =
+                    if let Value::Boolean(val) = state.current_frame.op_stack.pop().unwrap() {
+                        val
+                    } else {
+                        panic!("ConditionalJump expects boolean");
+                    };
                 if condition {
-                    current_frame.index = jump_index;
+                    state.current_frame.index = jump_index;
                 }
             }
             OpCode::ComparisonJump => {
-                let greater_index = current_frame.get_val();
-                let less_index = current_frame.get_val();
-                let equal_index = current_frame.get_val();
-                let rhs = current_frame.op_stack.pop().unwrap();
-                let lhs = current_frame.op_stack.pop().unwrap();
+                let greater_index = state.current_frame.get_val();
+                let less_index = state.current_frame.get_val();
+                let equal_index = state.current_frame.get_val();
+                let rhs = state.current_frame.op_stack.pop().unwrap();
+                let lhs = state.current_frame.op_stack.pop().unwrap();
                 let ordering = compare_numerical(lhs, rhs);
                 let index = match ordering {
                     Ordering::Less => less_index,
                     Ordering::Equal => equal_index,
                     Ordering::Greater => greater_index,
                 };
-                current_frame.index = index;
+                state.current_frame.index = index;
             }
             OpCode::Jump => {
-                let jump_index = current_frame.get_val();
-                current_frame.index = jump_index;
+                let jump_index = state.current_frame.get_val();
+                state.current_frame.index = jump_index;
             }
             OpCode::Pop => {
-                current_frame.op_stack.pop().unwrap();
+                state.current_frame.op_stack.pop().unwrap();
             }
             OpCode::IsNull => {
-                let value = current_frame.op_stack.pop().unwrap();
+                let value = state.current_frame.op_stack.pop().unwrap();
                 let is_null = if let Value::Null = value { true } else { false };
-                current_frame.op_stack.push(Value::Boolean(is_null));
+                state.current_frame.op_stack.push(Value::Boolean(is_null));
             }
             OpCode::Duplicate => {
-                let value = (*current_frame.op_stack.last().unwrap()).clone();
-                current_frame.op_stack.push(value);
+                let value = (*state.current_frame.op_stack.last().unwrap()).clone();
+                state.current_frame.op_stack.push(value);
             }
             OpCode::AssignReference => {
-                let pool_index = current_frame.get_val();
-                let reference_name = current_frame
+                let pool_index = state.current_frame.get_val();
+                let reference_name = state
+                    .current_frame
                     .bfunc
                     .target
                     .function
                     .get_reference(pool_index);
-                let is_let = current_frame.get_assign_type();
-                let value = current_frame.op_stack.pop().unwrap();
+                let is_let = state.current_frame.get_assign_type();
+                let value = state.current_frame.op_stack.pop().unwrap();
                 if is_let {
-                    current_frame
+                    state
+                        .current_frame
                         .variables
                         .push(VariableStack::Variable(Variable {
                             value,
                             name: reference_name,
                         }))
                 } else {
-                    let variable = current_frame
+                    let variable = state
+                        .current_frame
                         .variables
                         .iter_mut()
                         .rev()
@@ -580,15 +626,17 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 }
             }
             OpCode::AssignField => {
-                let pool_index = current_frame.get_val();
-                let reference_name = current_frame
+                let pool_index = state.current_frame.get_val();
+                let reference_name = state
+                    .current_frame
                     .bfunc
                     .target
                     .function
                     .get_reference(pool_index);
-                let is_let = current_frame.get_assign_type();
-                let value = current_frame.op_stack.pop().unwrap();
-                let object = if let Value::Object(ptr) = current_frame.op_stack.pop().unwrap() {
+                let is_let = state.current_frame.get_assign_type();
+                let value = state.current_frame.op_stack.pop().unwrap();
+                let object = if let Value::Object(ptr) = state.current_frame.op_stack.pop().unwrap()
+                {
                     ptr
                 } else {
                     panic!("Cannot Assign to non-object")
@@ -603,18 +651,19 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 }
             }
             OpCode::DuplicateMany => {
-                let n = current_frame.get_val();
-                let len = current_frame.op_stack.len();
+                let n = state.current_frame.get_val();
+                let len = state.current_frame.op_stack.len();
                 assert!(n <= len);
-                let mut range = current_frame.op_stack[(len - n)..len]
+                let mut range = state.current_frame.op_stack[(len - n)..len]
                     .iter()
                     .map(|val| val.clone())
                     .collect();
-                current_frame.op_stack.append(&mut range);
+                state.current_frame.op_stack.append(&mut range);
             }
             OpCode::PushBuiltin => {
-                let pool_index = current_frame.get_val();
-                let reference_name = current_frame
+                let pool_index = state.current_frame.get_val();
+                let reference_name = state
+                    .current_frame
                     .bfunc
                     .target
                     .function
@@ -623,17 +672,18 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .get(reference_name.as_str())
                     .expect("Missing Builtin")
                     .clone();
-                current_frame.op_stack.push(builtin);
+                state.current_frame.op_stack.push(builtin);
             }
             OpCode::DuplicateDeep => {
-                let dup_index = current_frame.get_val();
-                let stack_index = current_frame.op_stack.len() - 1 - dup_index;
-                let value = current_frame
+                let dup_index = state.current_frame.get_val();
+                let stack_index = state.current_frame.op_stack.len() - 1 - dup_index;
+                let value = state
+                    .current_frame
                     .op_stack
                     .get(stack_index)
                     .expect("Invalid DuplicateDeep Index")
                     .clone();
-                current_frame.op_stack.push(value);
+                state.current_frame.op_stack.push(value);
             }
         }
     }

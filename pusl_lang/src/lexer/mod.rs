@@ -254,6 +254,7 @@ fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
                 "fn" => Some(Token::Keyword(Keyword::Fn)),
                 "import" => Some(Token::Keyword(Keyword::Import)),
                 "as" => Some(Token::Keyword(Keyword::As)),
+                "yield" => Some(Token::Keyword(Keyword::Yield)),
                 _ => None,
             }
             .unwrap_or_else(|| Token::Reference(ident));
