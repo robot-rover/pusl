@@ -6,7 +6,6 @@ extern crate shrust;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use clap::{App, Arg, SubCommand};
-use pusl_lang::backend::execute;
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile, Function};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
@@ -36,7 +35,7 @@ fn compile_from_source_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCo
     Ok(base_func)
 }
 
-fn write_to_code_path(path: &PathBuf, base_func: Function<()>, verbosity: u64) -> io::Result<()> {
+fn write_to_code_path(path: &PathBuf, base_func: Function, verbosity: u64) -> io::Result<()> {
     if verbosity >= 1 {
         println!("Using output file: {}", path.display());
     }
@@ -53,7 +52,7 @@ fn write_to_code_path(path: &PathBuf, base_func: Function<()>, verbosity: u64) -
     Ok(())
 }
 
-fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<Function<()>> {
+fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<Function> {
     if verbosity >= 1 {
         println!("Using input file: {}", path.display());
     }
@@ -72,7 +71,7 @@ fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<Function<()
         bytcode_minor <= MINOR_VERSION,
         "Bytecode version is incompatible"
     );
-    let function: Function<()> = bincode::deserialize_from(reader).expect("Bytecode is corrupt");
+    let function: Function = bincode::deserialize_from(reader).expect("Bytecode is corrupt");
     if verbosity >= 2 {
         println!("{:?}", &function);
     }

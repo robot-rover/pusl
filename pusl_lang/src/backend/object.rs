@@ -1,4 +1,4 @@
-use super::BoundFunction;
+use super::{BoundFunction, StackFrame};
 use crate::backend::GcPoolRef;
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;

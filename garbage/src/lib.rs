@@ -1,5 +1,3 @@
-#![feature(drain_filter)]
-
 use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::fmt::Formatter;
@@ -153,17 +151,35 @@ impl ManagedPool {
 
         println!("Dropping Unmarked");
         // Drop all non-marked objects, unmarking all objects in the process
+        // unsafe {
+        //     self.pool
+        //         .drain_filter(|obj| {
+        //             let obj = &*obj.as_ptr();
+        //             let val = !obj.flag.get();
+        //             obj.flag.set(false);
+        //             val
+        //         })
+        //         .for_each(|obj| {
+        //             Box::from_raw(obj.as_ptr());
+        //         })
+        // }
         unsafe {
-            self.pool
-                .drain_filter(|obj| {
-                    let obj = &*obj.as_ptr();
-                    let val = !obj.flag.get();
-                    obj.flag.set(false);
-                    val
+            let mut pool = Vec::new();
+            std::mem::swap(&mut pool, &mut self.pool);
+            self.pool = pool
+                .into_iter()
+                .filter_map(|obj| {
+                    let obj_ref = &*obj.as_ptr();
+                    let val = !obj_ref.flag.get();
+                    obj_ref.flag.set(false);
+                    if val {
+                        Some(obj)
+                    } else {
+                        Box::from_raw(obj.as_ptr());
+                        None
+                    }
                 })
-                .for_each(|obj| {
-                    Box::from_raw(obj.as_ptr());
-                })
+                .collect()
         }
     }
 }

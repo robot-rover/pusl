@@ -72,7 +72,7 @@ struct Variable {
     name: String,
 }
 
-struct StackFrame {
+pub struct StackFrame {
     this_obj: Option<GcPointer<RefCell<Object>>>,
     bfunc: GcPointer<BoundFunction>,
     variables: Vec<VariableStack>,
