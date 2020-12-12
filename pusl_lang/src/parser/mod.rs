@@ -743,6 +743,9 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
             Token::Reference(name) => Parsed(Box::new(Eval::Expression(Expression::Reference {
                 target: name,
             }))),
+            Token::Keyword(Keyword::This) => {
+                Parsed(Box::new(Eval::Expression(Expression::SelfReference)))
+            }
             Token::Symbol(Symbol::OpenParenthesis) => {
                 if let Some(Parsed(_)) = between.last() {
                     let args = parse_comma_list(tokens, ExpEnclosure::Parenthesis);
@@ -916,10 +919,10 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
             false,
         )],
     );
-    let expr = if let Some(Parsed(exp_ref)) = between.pop() {
-        exp_ref
-    } else {
-        panic!()
+    let expr = match between.pop() {
+        Some(Parsed(exp_ref)) => exp_ref,
+        Some(Lexeme(token)) => panic!("{:?}", token),
+        None => panic!(),
     };
     assert!(between.is_empty());
     expr

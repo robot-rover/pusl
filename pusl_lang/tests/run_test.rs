@@ -20,7 +20,6 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
 
 #[test]
 fn small_test() {
-    simple_logger::init().unwrap();
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
@@ -28,5 +27,17 @@ fn small_test() {
     let ctx = ExecContext {
         resolve: test_resolve,
     };
+    execute(code, ctx, None);
+}
+
+const FIBB_SOURCE: &'static str = include_str!("../resources/fibb.pusl");
+
+#[test]
+fn fibb_test() {
+    let lines = FIBB_SOURCE.lines();
+    let roots = lex(lines);
+    let ast = parse(roots);
+    let code = linearize_file(ast, PathBuf::from("../resources/fibb.pusl"));
+    let ctx = ExecContext { resolve: |_| None };
     execute(code, ctx, None);
 }

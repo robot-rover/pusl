@@ -1,0 +1,13 @@
+let fibbonacci = fn(num):
+    let a = self
+    print(a.f, "\n")
+    if num > 2:
+        return (num-1) + (num - 2)
+    else if num == 2:
+        return 1
+    else:
+        return 0
+let c = Object()
+let c.f = fibbonacci
+let b = c.f(10)
+print(b, "\n")
