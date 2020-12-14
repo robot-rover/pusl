@@ -7,10 +7,10 @@ use std::collections::HashMap;
 
 pub fn get_builtins() -> HashMap<&'static str, Value> {
     let mut map = HashMap::new();
-    map.insert("type_of", Value::Native(type_of));
-    map.insert("print", Value::Native(print));
-    map.insert("native", Value::Native(native_import));
-    map.insert("Object", Value::Native(new_object));
+    map.insert("type_of", Value::native_fn(type_of));
+    map.insert("print", Value::native_fn(print));
+    map.insert("native", Value::native_fn(native_import));
+    map.insert("Object", Value::native_fn(new_object));
 
     list::register(&mut map);
 

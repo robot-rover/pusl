@@ -10,7 +10,7 @@ impl Key for ListKey {
 }
 
 pub fn register(builtins: &mut HashMap<&str, Value>) {
-    builtins.insert("List", Value::Native(new_list));
+    builtins.insert("List", Value::native_fn(new_list));
 }
 
 fn new_list(args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
@@ -19,9 +19,9 @@ fn new_list(args: Vec<Value>, _: Option<Value>, gc: GcPoolRef) -> Value {
         let mut borrow = object.borrow_mut();
         borrow.native_data.insert::<ListKey>(args);
         //TODO: This should be handled with a super object instead
-        borrow.let_field(String::from("push"), Value::Native(list_push));
-        borrow.let_field(String::from("@index_get"), Value::Native(list_index_get));
-        borrow.let_field(String::from("@index_set"), Value::Native(list_index_set));
+        borrow.let_field(String::from("push"), Value::native_fn(list_push));
+        borrow.let_field(String::from("@index_get"), Value::native_fn(list_index_get));
+        borrow.let_field(String::from("@index_set"), Value::native_fn(list_index_set));
     }
     let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(object));
 

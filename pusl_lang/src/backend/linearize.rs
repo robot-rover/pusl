@@ -24,23 +24,22 @@ pub enum OpCode {
     PushFunction,  //  1 ByteCode Value (index of sub-function pool) (also bind)
     PushSelf,
     FunctionCall, // n + 1 Stack Values (bottom is reference to function) (first opcode is n)
-    MethodCall, // n + 2 Stack Values (bottom is self, then function, then n arguments) first opcode is n
-    FieldAccess, // 1 Stack value (object reference) and 1 ByteCode Value (index of reference pool)
-    Addition,   // 2 Stack Values
-    Subtraction, // 2 Stack Values
-    Negate,     // 2 Stack Values
-    Multiply,   // 2 Stack Values
-    Divide,     // 2 Stack Values
+    FieldAccess,  // 1 Stack value (object reference) and 1 ByteCode Value (index of reference pool)
+    Addition,     // 2 Stack Values
+    Subtraction,  // 2 Stack Values
+    Negate,       // 2 Stack Values
+    Multiply,     // 2 Stack Values
+    Divide,       // 2 Stack Values
     AssignReference, // 1 Stack Value (value) and 2 opcode (reference, type)
-    AssignField, // 2 Stack Values (object - bottom, value - top) and 2 opcode (field name, type)
+    AssignField,  // 2 Stack Values (object - bottom, value - top) and 2 opcode (field name, type)
     DivideTruncate, // 2 Stack Values
-    Exponent,   // 2 Stack Values
-    Compare,    // 2 Stack Values (top is lhs), 1 OpCode (as Compare)
-    And,        // 2 Stack Values
-    Or,         // 2 Stack Values
-    ScopeUp,    // Go into a new block
-    ScopeDown,  // Leave a block
-    Return,     // Return top of Stack
+    Exponent,     // 2 Stack Values
+    Compare,      // 2 Stack Values (top is lhs), 1 OpCode (as Compare)
+    And,          // 2 Stack Values
+    Or,           // 2 Stack Values
+    ScopeUp,      // Go into a new block
+    ScopeDown,    // Leave a block
+    Return,       // Return top of Stack
     ConditionalJump, // 1 Stack Value and 1 OpCode Value
     ComparisonJump, // 2 Stack Values and 3 OpCodes (Greater Than -> First Jump, Less Than -> Second Jump, Equal -> Third Jump)
     Jump,           // 1 OpCode Value
@@ -389,10 +388,6 @@ where
             let num_args = code_iter.next().unwrap().1.as_val();
             write!(f, "FnCall {}", num_args)?;
         }
-        OpCode::MethodCall => {
-            let num_args = code_iter.next().unwrap().1.as_val();
-            write!(f, "MethodCall {}", num_args)?;
-        }
         OpCode::FieldAccess => {
             let pool_index = code_iter.next().unwrap().1.as_val();
             let pool_value = &func.references[pool_index];
@@ -629,32 +624,12 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             false
         }
         Expression::FunctionCall { target, arguments } => {
-            func.function.code.push(ByteCode::op(OpCode::PushReference));
-            let pool_index = func.function.add_reference(target);
-            func.function.code.push(ByteCode::val(pool_index));
+            linearize_exp_ref(target, func, true);
             let num_args = arguments.len();
             arguments
                 .into_iter()
                 .for_each(|argument| linearize_exp_ref(argument, func, true));
             func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.function.code.push(ByteCode::val(num_args));
-            true
-        }
-        Expression::MethodCall {
-            target,
-            field,
-            arguments,
-        } => {
-            linearize_exp_ref(target, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Duplicate));
-            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
-            let pool_index = func.function.add_reference(field);
-            func.function.code.push(ByteCode::val(pool_index));
-            let num_args = arguments.len();
-            arguments
-                .into_iter()
-                .for_each(|argument| linearize_exp_ref(argument, func, true));
-            func.function.code.push(ByteCode::op(OpCode::MethodCall));
             func.function.code.push(ByteCode::val(num_args));
             true
         }
@@ -767,13 +742,12 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
                         func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
                         func.function.code.push(ByteCode::val(1));
-                        func.function.code.push(ByteCode::op(OpCode::Duplicate));
                         func.function.code.push(ByteCode::op(OpCode::FieldAccess));
                         let pool_index = func.function.add_reference(String::from("@index_get"));
                         func.function.code.push(ByteCode::val(pool_index));
                         func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                        func.function.code.push(ByteCode::val(2));
-                        func.function.code.push(ByteCode::op(OpCode::MethodCall));
+                        func.function.code.push(ByteCode::val(1));
+                        func.function.code.push(ByteCode::op(OpCode::FunctionCall));
                         func.function.code.push(ByteCode::val(1));
                         func.function.code.push(ByteCode::op(OpCode::IsNull));
                         func.function.code.push(ByteCode::op(OpCode::Negate));
@@ -787,9 +761,9 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                     let pool_index = func.function.add_reference(String::from("@index_set"));
                     func.function.code.push(ByteCode::val(pool_index));
                     func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                    func.function.code.push(ByteCode::val(2));
+                    func.function.code.push(ByteCode::val(1));
                     linearize_exp_ref(expression, func, true);
-                    func.function.code.push(ByteCode::op(OpCode::MethodCall));
+                    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
                     func.function.code.push(ByteCode::val(2));
                     if let Some(jump_instruction) = skip_index {
                         func.function
@@ -872,12 +846,11 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
         }
         Expression::ListAccess { target, index } => {
             linearize_exp_ref(target, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Duplicate));
             func.function.code.push(ByteCode::op(OpCode::FieldAccess));
             let pool_index = func.function.add_reference(String::from("@index_get"));
             func.function.code.push(ByteCode::val(pool_index));
             linearize_exp_ref(index, func, true);
-            func.function.code.push(ByteCode::op(OpCode::MethodCall));
+            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
             func.function.code.push(ByteCode::val(1));
             true
         }

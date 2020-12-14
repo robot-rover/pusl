@@ -26,6 +26,8 @@ use debug::{DebugCommand, DebugResponse};
 use fmt::Formatter;
 use linearize::{OpCode, ResolvedFunction};
 
+use self::object::FunctionTarget;
+
 pub struct BoundFunction {
     pub bound_values: Vec<Value>,
     pub target: &'static ResolvedFunction,
@@ -81,19 +83,9 @@ pub struct StackFrame {
 }
 
 impl StackFrame {
-    fn from_function(bfunc: GcPointer<BoundFunction>) -> Self {
+    fn from_function(bfunc: GcPointer<BoundFunction>, this_obj: Option<ObjectPtr>) -> Self {
         StackFrame {
-            this_obj: None,
-            bfunc,
-            variables: vec![],
-            op_stack: vec![],
-            index: 0,
-        }
-    }
-
-    fn from_method(bfunc: GcPointer<BoundFunction>, this_obj: ObjectPtr) -> Self {
-        StackFrame {
-            this_obj: Some(this_obj),
+            this_obj,
             bfunc,
             variables: vec![],
             op_stack: vec![],
@@ -380,7 +372,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
 
                 let bfunc = rfunc.bind(bound_values, &GC);
 
-                state.current_frame.op_stack.push(Value::Function(bfunc));
+                state.current_frame.op_stack.push(Value::pusl_fn(bfunc));
             }
             OpCode::FunctionCall => {
                 let num_args = state.current_frame.get_val();
@@ -389,10 +381,10 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                 let args = state.current_frame.op_stack.split_off(split_off_index);
                 let function = state.current_frame.op_stack.pop().unwrap();
                 match function {
-                    Value::Function(reference) => {
+                    Value::Function((FunctionTarget::Pusl(reference), this)) => {
                         assert_eq!(reference.target.function.args.len(), args.len());
                         let arg_value_iter = args.into_iter();
-                        let mut new_frame = StackFrame::from_function(reference);
+                        let mut new_frame = StackFrame::from_function(reference, this);
                         for (name, value) in new_frame
                             .bfunc
                             .target
@@ -409,48 +401,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
                         state.execution_stack.push(old_frame);
                     }
-                    Value::Native(ptr) => {
-                        let result = ptr(args, None, &GC);
-                        state.current_frame.op_stack.push(result);
-                    }
-                    _ => panic!("Value must be a function to call"),
-                };
-            }
-            OpCode::MethodCall => {
-                let num_args = state.current_frame.get_val();
-                assert!(state.current_frame.op_stack.len() >= num_args);
-                let split_off_index = state.current_frame.op_stack.len() - num_args;
-                let args = state.current_frame.op_stack.split_off(split_off_index);
-                let function = state.current_frame.op_stack.pop().unwrap();
-                let value = state.current_frame.op_stack.pop().unwrap();
-                match function {
-                    Value::Function(reference) => {
-                        assert_eq!(reference.target.function.args.len(), args.len());
-                        let this_obj = if let Value::Object(ptr) = value {
-                            ptr
-                        } else {
-                            panic!("Cannot call method on Non Object")
-                        };
-                        let arg_value_iter = args.into_iter();
-                        let mut new_frame = StackFrame::from_method(reference, this_obj);
-                        for (name, value) in new_frame
-                            .bfunc
-                            .target
-                            .function
-                            .args
-                            .iter()
-                            .cloned()
-                            .zip(arg_value_iter)
-                        {
-                            new_frame
-                                .variables
-                                .push(VariableStack::Variable(Variable { value, name }));
-                        }
-                        let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
-                        state.execution_stack.push(old_frame);
-                    }
-                    Value::Native(ptr) => {
-                        let result = ptr(args, Some(value), &GC);
+                    Value::Function((FunctionTarget::Native(ptr), this)) => {
+                        let this = this.map(|obj| Value::Object(obj));
+                        let result = ptr(args, this, &GC);
                         state.current_frame.op_stack.push(result);
                     }
                     _ => panic!("Value must be a function to call"),
@@ -466,7 +419,15 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .function
                     .get_reference(name_index);
                 let value = match value {
-                    Value::Object(object) => Object::get_field(object, name.as_str()),
+                    Value::Object(object) => {
+                        let value = Object::get_field(&object, name.as_str());
+                        match value {
+                            Value::Function((target, None)) => {
+                                Value::Function((target, Some(object)))
+                            }
+                            other => other,
+                        }
+                    }
                     Value::String(_) => unimplemented!(),
                     _ => panic!("Cannot access field of this value"),
                 };
@@ -880,22 +841,28 @@ fn compare(lhs: Value, rhs: Value, compare: Compare) -> Value {
                     false
                 }
             }
-            Value::Function(lhs) => {
-                if let Value::Function(rhs) = rhs {
-                    lhs == rhs
+            Value::Function((lhs_target, lhs_self)) => {
+                if let Value::Function((rhs_target, rhs_self)) = rhs {
+                    if lhs_self == rhs_self {
+                        match lhs_target {
+                            object::FunctionTarget::Native(lfun) => match rhs_target {
+                                object::FunctionTarget::Native(rfun) => lfun == rfun,
+                                object::FunctionTarget::Pusl(_) => false,
+                            },
+                            object::FunctionTarget::Pusl(lfun) => match rhs_target {
+                                object::FunctionTarget::Native(_) => false,
+                                object::FunctionTarget::Pusl(rfun) => lfun == rfun,
+                            },
+                        }
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
             }
             Value::Object(lhs) => {
                 if let Value::Object(rhs) = rhs {
-                    lhs == rhs
-                } else {
-                    false
-                }
-            }
-            Value::Native(lhs) => {
-                if let Value::Native(rhs) = rhs {
                     lhs == rhs
                 } else {
                     false

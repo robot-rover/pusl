@@ -34,13 +34,7 @@ pub enum Expression {
     },
 
     FunctionCall {
-        target: String,
-        arguments: Vec<ExpRef>,
-    },
-
-    MethodCall {
         target: ExpRef,
-        field: String,
         arguments: Vec<ExpRef>,
     },
 

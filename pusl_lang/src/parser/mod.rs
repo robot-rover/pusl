@@ -626,53 +626,34 @@ where
         let next_between = match next {
             Parsed(exp_ref) => match *exp_ref {
                 Eval::Expression(Expression::FunctionCall { arguments, .. }) => {
-                    let call = if let Some(Parsed(exp_ref)) = result.pop() {
-                        match *exp_ref {
-                            Eval::Expression(Expression::Reference { target }) => {
-                                Expression::FunctionCall { target, arguments }
-                            }
-                            Eval::Expression(Expression::FieldAccess { target, name }) => {
-                                Expression::MethodCall {
-                                    target,
-                                    field: name,
-                                    arguments,
-                                }
-                            }
-                            _ => panic!(),
-                        }
-                    } else {
-                        panic!()
+                    let target = match result.pop() {
+                        Some(Parsed(exp_ref)) => exp_ref,
+                        other => panic!("{:?}", other),
                     };
-                    Parsed(Box::new(Eval::Expression(call)))
+                    let expr = Expression::FunctionCall { target, arguments };
+                    Parsed(Box::new(Eval::Expression(expr)))
                 }
                 Eval::Expression(Expression::ListAccess { index, .. }) => {
-                    let parent = if let Some(Parsed(exp_ref)) = result.pop() {
-                        exp_ref
-                    } else {
-                        panic!()
+                    let target = match result.pop() {
+                        Some(Parsed(exp_ref)) => exp_ref,
+                        other => panic!("{:?}", other),
                     };
-                    let expr = Expression::ListAccess {
-                        target: parent,
-                        index,
-                    };
+                    let expr = Expression::ListAccess { target, index };
                     Parsed(Box::new(Eval::Expression(expr)))
                 }
                 others => Parsed(Box::new(others)),
             },
             Lexeme(Token::Symbol(Symbol::Period)) => {
-                let lhs_exp = if let Some(Parsed(exp_ref)) = result.pop() {
-                    exp_ref
-                } else {
-                    panic!()
+                let lhs_exp = match result.pop() {
+                    Some(Parsed(exp_ref)) => exp_ref,
+                    other => panic!("{:?}", other),
                 };
-                let name = if let Some(Parsed(exp_ref)) = iter.next() {
-                    if let Eval::Expression(Expression::Reference { target }) = *exp_ref {
-                        target
-                    } else {
-                        panic!()
-                    }
-                } else {
-                    panic!()
+                let name = match iter.next() {
+                    Some(Parsed(exp_ref)) => match *exp_ref {
+                        Eval::Expression(Expression::Reference { target }) => target,
+                        other => panic!("{:?}", other),
+                    },
+                    other => panic!("{:?}", other),
                 };
                 Parsed(Box::new(Eval::Expression(Expression::FieldAccess {
                     target: lhs_exp,
@@ -750,7 +731,9 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
                 if let Some(Parsed(_)) = between.last() {
                     let args = parse_comma_list(tokens, ExpEnclosure::Parenthesis);
                     let expr = Expression::FunctionCall {
-                        target: "".to_string(),
+                        target: Box::new(Eval::Expression(Expression::Joiner {
+                            expressions: vec![],
+                        })),
                         arguments: args,
                     };
                     Parsed(Box::new(Eval::Expression(expr)))

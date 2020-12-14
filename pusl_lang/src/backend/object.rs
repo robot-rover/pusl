@@ -15,14 +15,19 @@ pub type NativeFn = fn(Vec<Value>, Option<Value>, GcPoolRef) -> Value;
 pub type FnPtr = GcPointer<BoundFunction>;
 
 #[derive(Clone, Debug)]
+pub enum FunctionTarget {
+    Native(NativeFn),
+    Pusl(FnPtr),
+}
+
+#[derive(Clone, Debug)]
 pub enum Value {
     Null,
     Boolean(bool),
     Integer(i64),
     Float(f64),
     String(StringPtr),
-    Function(FnPtr),
-    Native(NativeFn),
+    Function((FunctionTarget, Option<ObjectPtr>)),
     Object(ObjectPtr),
 }
 
@@ -56,8 +61,7 @@ value_try_from!(bool, Value::Boolean);
 value_try_from!(i64, Value::Integer);
 value_try_from!(f64, Value::Float);
 value_try_from!(StringPtr, Value::String);
-value_try_from!(FnPtr, Value::Function);
-value_try_from!(NativeFn, Value::Native);
+value_try_from!((FunctionTarget, Option<ObjectPtr>), Value::Function);
 value_try_from!(ObjectPtr, Value::Object);
 
 impl Display for Value {
@@ -68,8 +72,16 @@ impl Display for Value {
             Value::Integer(val) => write!(f, "{}", val)?,
             Value::Float(val) => write!(f, "{}", val)?,
             Value::String(val) => write!(f, "{}", **val)?,
-            Value::Function(val) => write!(f, "Function {:?}", val)?,
-            Value::Native(val) => write!(f, "NativeFunc {:p}", *val)?,
+            Value::Function((FunctionTarget::Pusl(val), Some(this))) => {
+                write!(f, "Bound Function {:?} @ {:?}", val, this)?
+            }
+            Value::Function((FunctionTarget::Pusl(val), None)) => write!(f, "Function {:?}", val)?,
+            Value::Function((FunctionTarget::Native(val), Some(this))) => {
+                write!(f, "Bound NativeFunc {:p} @ {:?}", *val, this)?
+            }
+            Value::Function((FunctionTarget::Native(val), None)) => {
+                write!(f, "NativeFunc {:p}", *val)?
+            }
             Value::Object(val) => {
                 write!(f, "Object ")?;
                 (*val).write_addr(f)?;
@@ -87,10 +99,18 @@ impl Value {
             Value::Integer(_) => "Integer",
             Value::Float(_) => "Float",
             Value::String(_) => "String",
-            Value::Function(_) => "Function",
+            Value::Function((FunctionTarget::Pusl(_), _)) => "Pusl Function",
+            Value::Function((FunctionTarget::Native(_), _)) => "Native Function",
             Value::Object(_) => "Object",
-            Value::Native(_) => "Native Function",
         }
+    }
+
+    pub fn native_fn(function: NativeFn) -> Self {
+        Value::Function((FunctionTarget::Native(function), None))
+    }
+
+    pub fn pusl_fn(function: FnPtr) -> Self {
+        Value::Function((FunctionTarget::Pusl(function), None))
     }
 }
 
@@ -151,15 +171,15 @@ impl Object {
         RefCell::new(object)
     }
 
-    pub fn get_field(this: ObjectPtr, name: &str) -> Value {
-        let mut object_ptr = Some(this);
-        while let Some(object) = object_ptr {
-            if let Some(value) = object.borrow().fields.get(name).map(|val| (*val).clone()) {
-                return value;
-            }
-            object_ptr = object.borrow().super_ptr.clone();
+    pub fn get_field(object: &ObjectPtr, name: &str) -> Value {
+        //TODO: Bad Recursion
+        if let Some(value) = object.borrow().fields.get(name).map(|val| (*val).clone()) {
+            value
+        } else if let Some(super_ptr) = &object.borrow().super_ptr {
+            Object::get_field(super_ptr, name)
+        } else {
+            Value::Null
         }
-        Value::Null
     }
 
     pub fn let_field(&mut self, name: String, value: Value) {
