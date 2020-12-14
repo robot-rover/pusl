@@ -1,7 +1,7 @@
 extern crate pusl_lang;
 
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
-use pusl_lang::backend::{execute, ExecContext};
+use pusl_lang::backend::{startup, ExecContext};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;
@@ -27,7 +27,7 @@ fn small_test() {
     let ctx = ExecContext {
         resolve: test_resolve,
     };
-    execute(code, ctx, None);
+    startup(code, ctx);
 }
 
 const FIBB_SOURCE: &'static str = include_str!("../resources/fibb.pusl");
@@ -39,5 +39,5 @@ fn fibb_test() {
     let ast = parse(roots);
     let code = linearize_file(ast, PathBuf::from("../resources/fibb.pusl"));
     let ctx = ExecContext { resolve: |_| None };
-    execute(code, ctx, None);
+    startup(code, ctx);
 }

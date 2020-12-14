@@ -1,7 +1,7 @@
 extern crate garbage;
 
 use garbage::{GcPointer, ManagedPool, MarkTrace};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 
 #[derive(Debug, Clone)]
 struct DropNotify(i32, Option<GcPointer<RefCell<DropNotify>>>);

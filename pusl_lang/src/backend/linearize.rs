@@ -1,19 +1,19 @@
 use crate::backend::object::{FnPtr, Value};
 use crate::backend::object::{Object, ObjectPtr};
 use crate::backend::BoundFunction;
-use crate::backend::GcPoolRef;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
+use garbage::ManagedPool;
 use pad_adapter::PadAdapter;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
 use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
+use std::{cell::RefCell, fmt};
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -50,6 +50,7 @@ pub enum OpCode {
     PushBuiltin,    // 1 ByteCode Value (index of reference pool)
     DuplicateDeep,  // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
     PushSelf,
+    Yield, // Yield top of Stack
 }
 
 #[derive(Copy, Clone)]
@@ -204,12 +205,12 @@ impl ResolvedFunction {
         &self.sub_functions[pool_index]
     }
 
-    pub fn bind(&'static self, bound_values: Vec<Value>, gc: GcPoolRef) -> FnPtr {
+    pub fn bind(&'static self, bound_values: Vec<Value>, gc: &RefCell<ManagedPool>) -> FnPtr {
         let bfunc = BoundFunction {
             target: self,
             bound_values,
         };
-        gc.with(|gc| gc.borrow_mut().place_in_heap(bfunc))
+        gc.borrow_mut().place_in_heap(bfunc)
     }
 }
 
@@ -219,7 +220,8 @@ pub struct Function {
     pub binds: Vec<String>,
     literals: Vec<Literal>,
     references: Vec<String>,
-    pub(crate) code: Vec<ByteCode>,
+    pub code: Vec<ByteCode>,
+    pub is_generator: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -260,7 +262,7 @@ impl BasicFunction {
         self,
         global_imports: I,
         target_imports: Vec<Import>,
-        gc: GcPoolRef,
+        gc: &RefCell<ManagedPool>,
     ) -> &'static ResolvedFunction
     where
         I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
@@ -278,7 +280,7 @@ impl BasicFunction {
                 .map(|i| i.1.clone())
                 .unwrap();
             let import_object = Object::new_with_parent(import_parent);
-            let import_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(import_object));
+            let import_ptr = gc.borrow_mut().place_in_heap(import_object);
             imports.push((alias, import_ptr));
         }
 
@@ -465,6 +467,7 @@ where
             let dup_index = code_iter.next().unwrap().1.as_val();
             write!(f, "DuplicateDeep {}", dup_index)?;
         }
+        OpCode::Yield => write!(f, "Yield")?,
     }
 
     Ok(())
@@ -562,6 +565,7 @@ impl Function {
             literals: vec![],
             references: vec![],
             code: vec![],
+            is_generator: false,
         }
     }
 }
@@ -859,6 +863,12 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
         Expression::SelfReference => {
             func.function.code.push(ByteCode::op(OpCode::PushSelf));
             true
+        }
+        Expression::Yield { value } => {
+            func.function.is_generator = true;
+            linearize_exp_ref(value, func, true);
+            func.function.code.push(ByteCode::op(OpCode::Yield));
+            false
         }
     };
     match (expand_stack, created_value) {

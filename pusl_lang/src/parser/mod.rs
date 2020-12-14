@@ -591,15 +591,15 @@ where
     while let Some(next) = iter.next() {
         let next_between = if let Lexeme(token) = next {
             if let Some((_, func)) = targets.iter().find(|(target, _)| target == &token) {
-                let lhs_exp = if let Some(Parsed(exp_ref)) = result.pop() {
-                    exp_ref
-                } else {
-                    panic!()
+                let lhs_exp = match result.pop() {
+                    Some(Parsed(exp_ref)) => exp_ref,
+                    Some(Lexeme(token)) => panic!("{:?}", token),
+                    None => panic!(),
                 };
-                let rhs_exp = if let Some(Parsed(exp_ref)) = iter.next() {
-                    exp_ref
-                } else {
-                    panic!()
+                let rhs_exp = match iter.next() {
+                    Some(Parsed(exp_ref)) => exp_ref,
+                    Some(Lexeme(token)) => panic!("{:?}", token),
+                    None => panic!(),
                 };
                 let expr = func(lhs_exp, rhs_exp);
                 Parsed(Box::new(Eval::Expression(expr)))
@@ -900,11 +900,18 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
     );
     between = parser_pass_unary(
         between,
-        vec![(
-            Token::Keyword(Keyword::Return),
-            Box::new(|target| Expression::Return { value: target }),
-            false,
-        )],
+        vec![
+            (
+                Token::Keyword(Keyword::Return),
+                Box::new(|target| Expression::Return { value: target }),
+                false,
+            ),
+            (
+                Token::Keyword(Keyword::Yield),
+                Box::new(|target| Expression::Yield { value: target }),
+                false,
+            ),
+        ],
     );
     let expr = match between.pop() {
         Some(Parsed(exp_ref)) => exp_ref,

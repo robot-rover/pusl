@@ -1,20 +1,21 @@
+#![allow(unused_imports)]
 extern crate pusl_lang;
 extern crate shrust;
 extern crate simplelog;
 
 use pusl_lang::backend::debug::{DebugCommand, DebugResponse};
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
-use pusl_lang::backend::{execute, ExecContext};
+use pusl_lang::backend::{startup, ExecContext};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use shrust::{ExecError, Shell, ShellIO};
 use simplelog::{Config, ConfigBuilder, LevelFilter, TermLogger, TerminalMode};
-use std::num::ParseIntError;
 use std::path::PathBuf;
 use std::process::exit;
 use std::sync::mpsc;
 use std::sync::mpsc::RecvError;
 use std::thread;
+use std::{num::ParseIntError, unimplemented};
 
 const SMALL_SOURCE: &'static str = include_str!("../resources/simple_program.pusl");
 const SECOND_SOURCE: &'static str = include_str!("../resources/secondary_source.pusl");
@@ -28,6 +29,7 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     Some(code)
 }
 
+#[allow(unreachable_code, unused_variables)]
 fn main() {
     let mut config = ConfigBuilder::new();
     config
@@ -47,7 +49,8 @@ fn main() {
     let cli_channels = (command_channel_send, response_channel_recv);
     let debug_channels = (command_channel_recv, response_channel_send);
 
-    thread::spawn(move || execute(code, ctx, Some(debug_channels)));
+    unimplemented!();
+    // thread::spawn(move || startup(code, ctx, Some(debug_channels)));
 
     let line = if let DebugResponse::Paused(line) = cli_channels.1.recv().unwrap() {
         line

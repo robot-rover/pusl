@@ -1,5 +1,4 @@
-use super::{BoundFunction, StackFrame};
-use crate::backend::GcPoolRef;
+use super::{BoundFunction, ExecutionState, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
@@ -11,12 +10,15 @@ use typemap::TypeMap;
 
 pub type ObjectPtr = GcPointer<RefCell<Object>>;
 pub type StringPtr = GcPointer<String>;
-pub type NativeFn = fn(Vec<Value>, Option<Value>, GcPoolRef) -> Value;
+pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState>) -> Value;
 pub type FnPtr = GcPointer<BoundFunction>;
+pub type GeneratorFn = GcPointer<StackFrame>;
+
+pub type NativeFnHandle = usize;
 
 #[derive(Clone, Debug)]
 pub enum FunctionTarget {
-    Native(NativeFn),
+    Native(NativeFnHandle),
     Pusl(FnPtr),
 }
 
@@ -77,10 +79,10 @@ impl Display for Value {
             }
             Value::Function((FunctionTarget::Pusl(val), None)) => write!(f, "Function {:?}", val)?,
             Value::Function((FunctionTarget::Native(val), Some(this))) => {
-                write!(f, "Bound NativeFunc {:p} @ {:?}", *val, this)?
+                write!(f, "Bound NativeFunc {} @ {:?}", *val, this)?
             }
             Value::Function((FunctionTarget::Native(val), None)) => {
-                write!(f, "NativeFunc {:p}", *val)?
+                write!(f, "NativeFunc {}", *val)?
             }
             Value::Object(val) => {
                 write!(f, "Object ")?;
@@ -105,8 +107,23 @@ impl Value {
         }
     }
 
-    pub fn native_fn(function: NativeFn) -> Self {
-        Value::Function((FunctionTarget::Native(function), None))
+    pub fn native_fn<'a>(function: NativeFn<'a>, registry: &mut Vec<NativeFn<'a>>) -> Self {
+        let index = registry.len();
+        registry.push(function);
+        Value::Function((FunctionTarget::Native(index), None))
+    }
+
+    pub fn native_fn_handle<'a>(
+        function: NativeFn<'a>,
+        registry: &mut Vec<NativeFn<'a>>,
+    ) -> NativeFnHandle {
+        let index = registry.len();
+        registry.push(function);
+        index
+    }
+
+    pub fn native_fn_index(handle: NativeFnHandle) -> Self {
+        Value::Function((FunctionTarget::Native(handle), None))
     }
 
     pub fn pusl_fn(function: FnPtr) -> Self {

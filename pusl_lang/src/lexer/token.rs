@@ -1,8 +1,8 @@
 use crate::backend::object::Value;
-use crate::backend::GcPoolRef;
+use garbage::ManagedPool;
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::fmt::{Debug, Formatter};
+use std::{cell::RefCell, fmt};
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Literal {
@@ -14,13 +14,13 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn into_value(self, gc: GcPoolRef) -> Value {
+    pub fn into_value(self, gc: &RefCell<ManagedPool>) -> Value {
         match self {
             Literal::Boolean(value) => Value::Boolean(value),
             Literal::Integer(value) => Value::Integer(value),
             Literal::Float(value) => Value::Float(value),
             Literal::String(value) => {
-                let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(value));
+                let gc_ptr = gc.borrow_mut().place_in_heap(value);
                 Value::String(gc_ptr)
             }
             Literal::Null => Value::Null,

@@ -115,6 +115,10 @@ pub enum Expression {
         value: ExpRef,
     },
 
+    Yield {
+        value: ExpRef,
+    },
+
     ListDeclaration {
         values: Vec<ExpRef>,
     },
