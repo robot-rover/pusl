@@ -167,6 +167,29 @@ struct ExecutionState {
     current_frame: StackFrame,
 }
 
+impl Debug for ExecutionState {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let current_op = self
+            .current_frame
+            .bfunc
+            .target
+            .function
+            .get_code(self.current_frame.index - 1)
+            .unwrap();
+        linearize::write_bytecode_line(
+            (
+                self.current_frame.index,
+                &linearize::ByteCode::op(current_op),
+            ),
+            f,
+            &mut (&self.current_frame.bfunc.target.function.code[self.current_frame.index..])
+                .iter()
+                .enumerate(),
+            &self.current_frame.bfunc.target.function,
+        )
+    }
+}
+
 pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTuple>) {
     let mut stop_index = None;
     if let Some(tuple) = &mut debug {
@@ -268,8 +291,8 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
             }
         };
         // TODO:
-        // if DEBUG {
-        //     write_bytecode_line((current_frame.index, &ByteCode::op(current_op)), &mut stdout_handle, &mut state.current_frame.function.code[current_frame.index..], state.current_frame.function)
+        // if true {
+        //     println!("{:?}", state);
         // }
         match current_op {
             OpCode::Modulus => {
@@ -289,13 +312,20 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         .into_value(&GC),
                 )
             }
-            OpCode::PushSelf => {
-                let self_ref = state
+            OpCode::PushThis => {
+                let this_ref = state
                     .current_frame
                     .this_obj
                     .clone()
-                    .expect("Cannot reference self");
-                state.current_frame.op_stack.push(Value::Object(self_ref));
+                    .expect("Cannot reference this");
+                state.current_frame.op_stack.push(Value::Object(this_ref));
+            }
+            OpCode::PushSelf => {
+                let self_ref = state.current_frame.bfunc.clone();
+                state.current_frame.op_stack.push(Value::Function((
+                    FunctionTarget::Pusl(self_ref),
+                    state.current_frame.this_obj.clone(),
+                )));
             }
             OpCode::PushReference => {
                 let pool_index = state.current_frame.get_val();
@@ -429,7 +459,7 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                         }
                     }
                     Value::String(_) => unimplemented!(),
-                    _ => panic!("Cannot access field of this value"),
+                    other => panic!("Cannot access field of this value: {:?}", other),
                 };
                 state.current_frame.op_stack.push(value);
             }
@@ -596,11 +626,9 @@ pub fn execute(main: ByteCodeFile, ctx: ExecContext, mut debug: Option<DebugTupl
                     .get_reference(pool_index);
                 let is_let = state.current_frame.get_assign_type();
                 let value = state.current_frame.op_stack.pop().unwrap();
-                let object = if let Value::Object(ptr) = state.current_frame.op_stack.pop().unwrap()
-                {
-                    ptr
-                } else {
-                    panic!("Cannot Assign to non-object")
+                let object = match state.current_frame.op_stack.pop().unwrap() {
+                    Value::Object(ptr) => ptr,
+                    other => panic!("Cannot Assign to field of {:?}", other),
                 };
 
                 if is_let {

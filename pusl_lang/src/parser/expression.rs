@@ -23,7 +23,7 @@ pub enum Expression {
         value: Literal,
     },
 
-    SelfReference,
+    ThisReference,
 
     Reference {
         target: String,
@@ -123,6 +123,8 @@ pub enum Expression {
         target: ExpRef,
         index: ExpRef,
     },
+
+    SelfReference,
 }
 
 bitflags! {

@@ -373,19 +373,20 @@ where
         AssignAccess::Reference { name }
     } else {
         let mut name_stack = Vec::new();
-        let mut self_base = false;
+        let mut this_base = false;
         while let Some(Token::Symbol(Symbol::Period)) = tokens.pop() {
             match tokens.pop() {
                 Some(Token::Reference(name)) => name_stack.push(name),
                 Some(Token::Keyword(Keyword::This)) => {
-                    self_base = true;
-                    assert!(tokens.is_empty(), "self is not a valid field name")
+                    this_base = true;
+                    assert!(tokens.is_empty(), "this is not a valid field name")
                 }
-                _ => panic!("Invalid Identifier"),
+                // Some(Token::Keyword())
+                other => panic!("Invalid Identifier: {:?}", other),
             }
         }
-        let mut target = if self_base {
-            Box::new(Eval::Expression(Expression::SelfReference))
+        let mut target = if this_base {
+            Box::new(Eval::Expression(Expression::ThisReference))
         } else {
             Box::new(Eval::Expression(Expression::Reference {
                 target: name_stack.pop().unwrap(),
@@ -725,6 +726,9 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
                 target: name,
             }))),
             Token::Keyword(Keyword::This) => {
+                Parsed(Box::new(Eval::Expression(Expression::ThisReference)))
+            }
+            Token::Keyword(Keyword::Self_) => {
                 Parsed(Box::new(Eval::Expression(Expression::SelfReference)))
             }
             Token::Symbol(Symbol::OpenParenthesis) => {

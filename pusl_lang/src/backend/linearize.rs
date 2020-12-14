@@ -22,7 +22,7 @@ pub enum OpCode {
     Literal,       // 1 ByteCode Value (index of literal pool)
     PushReference, // 1 ByteCode Value (index of reference pool)
     PushFunction,  //  1 ByteCode Value (index of sub-function pool) (also bind)
-    PushSelf,
+    PushThis,
     FunctionCall, // n + 1 Stack Values (bottom is reference to function) (first opcode is n)
     FieldAccess,  // 1 Stack value (object reference) and 1 ByteCode Value (index of reference pool)
     Addition,     // 2 Stack Values
@@ -49,6 +49,7 @@ pub enum OpCode {
     DuplicateMany,  // Copies n values onto top of stack (n is opcode)
     PushBuiltin,    // 1 ByteCode Value (index of reference pool)
     DuplicateDeep,  // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
+    PushSelf,
 }
 
 #[derive(Copy, Clone)]
@@ -368,6 +369,7 @@ where
     let op_code = bytecode.as_op();
     write!(f, "    {:3}: ", index)?;
     match op_code {
+        OpCode::PushThis => write!(f, "PushThis")?,
         OpCode::PushSelf => write!(f, "PushSelf")?,
         OpCode::Modulus => write!(f, "Modulus")?,
         OpCode::Literal => {
@@ -606,8 +608,8 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             func.function.code.push(ByteCode::val(literal_index));
             true
         }
-        Expression::SelfReference => {
-            func.function.code.push(ByteCode::op(OpCode::PushSelf));
+        Expression::ThisReference => {
+            func.function.code.push(ByteCode::op(OpCode::PushThis));
             true
         }
         Expression::Reference { target } => {
@@ -852,6 +854,10 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             linearize_exp_ref(index, func, true);
             func.function.code.push(ByteCode::op(OpCode::FunctionCall));
             func.function.code.push(ByteCode::val(1));
+            true
+        }
+        Expression::SelfReference => {
+            func.function.code.push(ByteCode::op(OpCode::PushSelf));
             true
         }
     };

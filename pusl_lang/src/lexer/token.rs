@@ -141,6 +141,7 @@ pub enum Keyword {
     In,
     To,
     This,
+    Self_,
     Return,
     Fn,
     Import,

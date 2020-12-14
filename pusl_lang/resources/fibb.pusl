@@ -1,8 +1,6 @@
 let fibbonacci = fn(num):
-    let a = self
-    print(a.f, "\n")
     if num > 2:
-        return (num-1) + (num - 2)
+        return self(num-1) + self(num - 2)
     else if num == 2:
         return 1
     else:
