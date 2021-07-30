@@ -1,0 +1,15 @@
+[package]
+name = "pusl_lang"
+version = "0.1.0"
+authors = ["robot_rover <sam.obrien00@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+garbage = { path = "../garbage", version = "0.1.0"}
+generational-arena = "0.2.6"
+bitflags = "1.2.1"
+serde = { version = "1.0.104", features = ["derive"] }
+log = "0.4.8"
+
+[dev-dependencies]
+simple_logger = { version = "1.6.0", features = ["colored"] }

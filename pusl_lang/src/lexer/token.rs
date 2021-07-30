@@ -1,20 +1,39 @@
+use crate::backend::object::Value;
+use crate::backend::GcPoolRef;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::fmt::{write, Debug, Formatter};
-use bitflags::_core::fmt::Error;
+use std::fmt::{Debug, Formatter};
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Literal {
     Boolean(bool),
     Integer(i64),
     Float(f64),
     String(String),
-    Null
+    Null,
+}
+
+impl Literal {
+    pub fn into_value(self, gc: GcPoolRef) -> Value {
+        match self {
+            Literal::Boolean(value) => Value::Boolean(value),
+            Literal::Integer(value) => Value::Integer(value),
+            Literal::Float(value) => Value::Float(value),
+            Literal::String(value) => {
+                let gc_ptr = gc.with(|gc| gc.borrow_mut().place_in_heap(value));
+                Value::String(gc_ptr)
+            }
+            Literal::Null => Value::Null,
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Symbol {
     OpenParenthesis,
     CloseParenthesis,
+    OpenSquareBracket,
+    CloseSquareBracket,
     Percent,
     Comma,
     ExclamationPoint,
@@ -37,7 +56,7 @@ pub enum Symbol {
     GreaterEquals,
     LessEquals,
     Or,
-    And
+    And,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -48,6 +67,7 @@ pub enum BlockType {
     While,
     For,
     Cmp,
+    Function,
 }
 
 pub enum LexUnit {
@@ -120,7 +140,11 @@ pub enum Keyword {
     Let,
     In,
     To,
-    This
+    This,
+    Return,
+    Fn,
+    Import,
+    As,
 }
 
 #[derive(Debug, PartialEq, Clone)]

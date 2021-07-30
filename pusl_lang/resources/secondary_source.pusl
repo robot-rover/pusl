@@ -1,0 +1,7 @@
+let information = "Hello There"
+
+let random = fn(seed):
+ return seed + 1
+
+let self.str = information
+let self.func = random

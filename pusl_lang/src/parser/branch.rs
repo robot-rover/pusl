@@ -1,10 +1,13 @@
-use crate::parser::{ExpRef, Expression};
+use crate::parser::ExpRef;
+
+#[derive(Debug)]
 pub struct ConditionBody {
     pub condition: ExpRef,
     pub body: ExpRef,
 }
 
 /// Syntax Blocks which branch execution flow
+#[derive(Debug)]
 pub enum Branch {
     IfElseBlock {
         conditions: Vec<ConditionBody>,
@@ -24,8 +27,13 @@ pub enum Branch {
     CompareBlock {
         lhs: ExpRef,
         rhs: ExpRef,
-        greater: ExpRef,
-        equal: ExpRef,
-        less: ExpRef,
+        greater: u8,
+        equal: u8,
+        less: u8,
+        body: Vec<ExpRef>,
+    },
+
+    Joiner {
+        expressions: Vec<ExpRef>,
     },
 }

@@ -3,12 +3,9 @@
 //! This hierarchy is taken in by the parser which assembles it into logical units.
 //! This module finds syntactical errors.
 
-use crate::lexer::peek_while::{peek_while, PeekWhile};
-use crate::lexer::token::BlockType::*;
-use crate::lexer::token::LexUnit::Statement;
-use crate::lexer::token::Literal::{Boolean, Float, Integer};
+use crate::lexer::peek_while::peek_while;
 use crate::lexer::token::Symbol::*;
-use crate::lexer::token::{Block, BlockType, LexUnit, Literal, Symbol, Token, Keyword};
+use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Literal, Symbol, Token};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -23,9 +20,11 @@ pub fn lex<'a, I>(lines: I) -> Vec<LexUnit>
 where
     I: IntoIterator<Item = &'a str>,
 {
-    let mut iter = lines.into_iter();
-    //    iter.by_ref().map(lex_line).for_each(|e| println!("{:?}", e));
-    let mut iter = iter.map(lex_line).peekable();
+    let iter = lines.into_iter();
+    let mut iter = iter
+        .map(lex_line)
+        .filter(|(line, _)| !line.is_empty())
+        .peekable();
     let mut roots = Vec::new();
     while let Some(root) = lex_internal(&mut iter, 0) {
         roots.push(root);
@@ -48,15 +47,15 @@ where
                 panic!();
             }
         }
-        if children.is_empty() {
-            Some(LexUnit::Statement(tokens))
-        } else {
+
+        if !children.is_empty() {
+            assert_eq!(tokens.last(), Some(&Token::Symbol(Symbol::Colon)));
             let first = tokens.first();
             let second = tokens.get(1);
             if let Some(&Token::Block(block_type)) = first {
                 let mut return_type = block_type;
-                if let BlockType::If = block_type {
-                    if let Some(&Token::Block(BlockType::Else)) = second {
+                if let BlockType::Else = block_type {
+                    if let Some(&Token::Block(BlockType::If)) = second {
                         return_type = BlockType::ElseIf;
                     }
                 }
@@ -66,8 +65,14 @@ where
                     children,
                 }))
             } else {
-                panic!("Block token encountered with no children")
+                Some(LexUnit::Block(Block {
+                    kind: BlockType::Function,
+                    line: tokens,
+                    children,
+                }))
             }
+        } else {
+            Some(LexUnit::Statement(tokens))
         }
     } else {
         None
@@ -82,9 +87,9 @@ fn read_identifier(line: &mut Source) -> String {
 fn read_numeric_literal(line: &mut Source) -> Literal {
     let result = peek_while(line, |&c| c.is_digit(10) || c == '.').collect::<String>();
     if result.contains(".") {
-        Float(result.parse().unwrap())
+        Literal::Float(result.parse().unwrap())
     } else {
-        Integer(result.parse().unwrap())
+        Literal::Integer(result.parse().unwrap())
     }
 }
 
@@ -152,6 +157,8 @@ fn read_symbol(line: &mut Source) -> Symbol {
             Some('=') => ConditionalAssignment,
             _ => panic!("Unrecognized Symbol"),
         },
+        '[' => OpenSquareBracket,
+        ']' => CloseSquareBracket,
 
         _ => panic!("Unrecognized Symbol"),
     }
@@ -160,7 +167,22 @@ fn read_symbol(line: &mut Source) -> Symbol {
 fn read_string_literal(line: &mut Source) -> String {
     let quote = line.next().unwrap();
     assert_eq!(quote, '"');
-    line.take_while(|&c| c != '"').collect::<String>()
+    let mut string = String::new();
+    while let Some(c) = line.next() {
+        if c == '"' {
+            break;
+        } else if c == '\\' {
+            let escaped = match line.next().expect("expected character after backslash") {
+                'n' => '\n',
+                't' => '\t',
+                _ => panic!("Illegal Character after backslash"),
+            };
+            string.push(escaped);
+        } else {
+            string.push(c);
+        }
+    }
+    string
 }
 
 fn lex_line(line: &str) -> (Vec<Token>, usize) {
@@ -182,6 +204,11 @@ fn lex_line(line: &str) -> (Vec<Token>, usize) {
                 "false" => Some(Token::Literal(Literal::Boolean(false))),
                 "let" => Some(Token::Keyword(Keyword::Let)),
                 "self" => Some(Token::Keyword(Keyword::This)),
+                "return" => Some(Token::Keyword(Keyword::Return)),
+                "null" => Some(Token::Literal(Literal::Null)),
+                "fn" => Some(Token::Keyword(Keyword::Fn)),
+                "import" => Some(Token::Keyword(Keyword::Import)),
+                "as" => Some(Token::Keyword(Keyword::As)),
                 _ => None,
             }
             .unwrap_or_else(|| Token::Reference(ident));

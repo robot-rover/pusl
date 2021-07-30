@@ -1,6 +1,8 @@
 #![feature(drain_filter)]
 
 use std::cell::{Cell, RefCell};
+use std::fmt;
+use std::fmt::Formatter;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -10,6 +12,12 @@ use std::rc::Rc;
 pub struct GcPointer<T: MarkTrace + ?Sized> {
     ptr: Cell<NonNull<ManagedData<T>>>,
     marker: PhantomData<Rc<T>>,
+}
+
+impl<T: MarkTrace + ?Sized + 'static> PartialEq for GcPointer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr.get() == other.ptr.get()
+    }
 }
 
 impl<T: MarkTrace + ?Sized + 'static> GcPointer<T> {
@@ -23,15 +31,21 @@ impl<T: MarkTrace + ?Sized + 'static> GcPointer<T> {
         }
     }
 
-    pub fn set_in_stack(&self, val: bool) {
-        unsafe { &*self.ptr.get().as_ptr() }.in_stack.set(val);
-    }
-
     fn new(ptr: NonNull<ManagedData<T>>) -> Self {
         GcPointer {
             ptr: Cell::new(ptr),
             marker: PhantomData,
         }
+    }
+
+    pub fn write_addr(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{:p}", self.ptr.get().as_ptr())
+    }
+}
+
+impl<T: MarkTrace + 'static> From<GcPointer<T>> for GcPointer<dyn MarkTrace> {
+    fn from(concrete: GcPointer<T>) -> Self {
+        GcPointer::new(concrete.ptr.get())
     }
 }
 
@@ -75,9 +89,20 @@ impl MarkTrace for String {
     fn mark_children(&self) {}
 }
 
+impl<T: MarkTrace> MarkTrace for Vec<T> {
+    fn mark_children(&self) {
+        for item in self {
+            item.mark_children();
+        }
+    }
+}
+
+
+
+
+
 struct ManagedData<T: MarkTrace + ?Sized> {
     flag: Cell<bool>,
-    in_stack: Cell<bool>,
     data: T,
 }
 
@@ -91,25 +116,16 @@ impl<T: MarkTrace + ?Sized + 'static> ManagedData<T> {
         self.flag.get()
     }
 
-    #[inline]
-    pub fn set_in_stack(&self, val: bool) {
-        self.in_stack.set(val)
-    }
-    #[inline]
-    fn get_in_stack(&self) -> bool {
-        self.in_stack.get()
-    }
-
     fn wrap_data<S: MarkTrace + 'static>(data: S) -> NonNull<ManagedData<S>> {
         let contents = ManagedData {
             flag: Cell::new(false),
-            in_stack: Cell::new(false),
             data,
         };
         unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(contents))) }
     }
 }
 
+#[derive(Debug)]
 pub struct ManagedPool {
     pool: Vec<NonNull<ManagedData<dyn MarkTrace>>>,
 }
@@ -125,14 +141,17 @@ impl ManagedPool {
         GcPointer::new(managed_box)
     }
 
-    pub fn collect_garbage(&mut self) {
+    pub fn collect_garbage<'a, I>(&mut self, anchors: I)
+    where
+        I: IntoIterator<Item = &'a GcPointer<dyn MarkTrace>>,
+    {
         println!("Recursive Marking");
         // For every rooted object, recursively mark all objects, stopping a branch if an object is already marked
-        for object in &mut self.pool {
-            let reference = unsafe { object.as_mut() };
-            if reference.in_stack.get() {
-                reference.flag.set(true);
-                reference.data.mark_children();
+        for anchor in anchors {
+            let mut anchor = anchor.ptr.get();
+            if !unsafe { anchor.as_ref() }.flag.get() {
+                unsafe { anchor.as_mut() }.flag.set(true);
+                unsafe { anchor.as_mut() }.data.mark_children();
             }
         }
 

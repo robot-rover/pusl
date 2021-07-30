@@ -1,0 +1,33 @@
+import alpha.bravo.charlie as nato
+import foo.bar as foobar
+
+let a = null ?: 45 + 4.5 / 2
+
+let mt = []
+print(mt[0])
+let array = ["l33t", 433110, 1.25]
+
+let i = 0
+while i < 10:
+ print(i, "\n")
+ i = i + 1
+
+let whomst = 10
+
+if houston() == true:
+ print()
+else if a + b > 10:
+ panic()
+else:
+ let whomst = "Heyo!"
+
+while f != 0:
+ print("Hello World " + f)
+
+let i = 0
+if f == 0:
+ i = 1
+
+let test = Object()
+let test.fun = fn(a, b, arg):
+ return arg(a, b)

@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "pusl_lang",
+    "garbage",
     "pusl",
-    "garbage"
+    "pusl_demo"
 ]

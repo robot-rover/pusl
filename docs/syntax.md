@@ -84,7 +84,7 @@ cmp <expr> to <expr>:
  - `?=` -> conditional assignment: if name to left is undefined, assign right side to it
  - `+` `-` `*` `/` -> math operators, division promotes to float unambiguously, for truncation use `//`
  - `//` -> truncating division
- - '%' -> Modulus Operator
+ - `%` -> Modulus Operator
  - `+` -> string concatenation
  - `=` -> assignment operator
  - `==` `!=` `>` `<` `>=` `<=` -> comparison operators
@@ -92,17 +92,26 @@ cmp <expr> to <expr>:
  - `#` -> comment
  - `:` -> Start a block
  - `!` -> Not
- - '&' -> Logical And
- - '|' -> Logical Or
+ - `&` -> Logical And
+ - `|` -> Logical Or
 
 ### Defining a Function
 ```
-let topLevelFunction = (param1, param2):
+let topLevelFunction = fn(param1, param2):
     <expr...>
 
-let noArgs = ():
+let noArgs = fn():
     <expr...>
+    return "Foo Bar"
 
+```
+
+#### Defining a Method
+
+```
+let object = Object()
+let object.method = fn(param):
+    <expr...>
 ```
 
 the reserved name `self` is used to refer to this object

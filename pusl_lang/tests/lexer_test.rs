@@ -1,4 +1,4 @@
-use pusl::lexer::lex;
+use pusl_lang::lexer::lex;
 
 const SMALL_SOURCE: &'static str = include_str!("../resources/small_source.pusl");
 
@@ -9,5 +9,4 @@ fn small_test() {
     for root in roots {
         print!("{:?}", root);
     }
-    panic!();
 }

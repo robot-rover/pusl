@@ -1,15 +1,27 @@
 use crate::lexer::token::Literal;
 use crate::parser::ExpRef;
-use generational_arena::Index;
+
+#[derive(Debug)]
+pub enum AssignAccess {
+    Field {
+        target: ExpRef,
+        name: String
+    },
+
+    Reference {
+        name: String,
+    },
+
+    Array {
+        target: ExpRef,
+        index: ExpRef,
+    }
+}
 
 /// Syntax Blocks which are linear
 /// i.e. they will never branch
 #[derive(Debug)]
 pub enum Expression {
-    Nullify {
-        expr: ExpRef
-    },
-
     Modulus {
         lhs: ExpRef,
         rhs: ExpRef,
@@ -18,6 +30,8 @@ pub enum Expression {
     Literal {
         value: Literal,
     },
+
+    SelfReference,
 
     Reference {
         target: String,
@@ -28,13 +42,19 @@ pub enum Expression {
     },
 
     FunctionCall {
+        target: String,
+        arguments: Vec<ExpRef>,
+    },
+
+    MethodCall {
         target: ExpRef,
+        field: String,
         arguments: Vec<ExpRef>,
     },
 
     FieldAccess {
         target: ExpRef,
-        name: ExpRef,
+        name: String,
     },
 
     Addition {
@@ -68,7 +88,7 @@ pub enum Expression {
     },
 
     Assigment {
-        target: ExpRef,
+        target: AssignAccess,
         expression: ExpRef,
         flags: AssignmentFlags,
     },
@@ -97,6 +117,24 @@ pub enum Expression {
     Or {
         lhs: ExpRef,
         rhs: ExpRef,
+    },
+
+    FunctionDeclaration {
+        params: Vec<String>,
+        body: ExpRef,
+    },
+
+    Return {
+        value: ExpRef,
+    },
+
+    ListDeclaration {
+        values: Vec<ExpRef>
+    },
+
+    ListAccess {
+        target: ExpRef,
+        index: ExpRef,
     }
 }
 
