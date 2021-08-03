@@ -1,11 +1,13 @@
 let range = fn(start, end):
-    i = start
+    let i = start
     while i < end:
         yield i
         i = i + 1
 
 let gen = range(1, 10)
-let index = 
-while !is_end(index):
-    print(index)
-    index = 
+while gen.hasNext():
+    print(gen.next())
+
+gen = range(1, 5)
+while true:
+    print(gen.next())

@@ -13,7 +13,7 @@ where
     }
 }
 
-fn convert_arg<T: TryFrom<Value>>(value: Value, arg_index: usize) -> T {
+pub fn convert_arg<T: TryFrom<Value>>(value: Value, arg_index: usize) -> T {
     if let Ok(converted) = T::try_from(value) {
         converted
     } else {

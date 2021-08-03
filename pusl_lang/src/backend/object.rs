@@ -13,6 +13,7 @@ pub type StringPtr = GcPointer<String>;
 pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState>) -> Value;
 pub type FnPtr = GcPointer<BoundFunction>;
 pub type GeneratorFn = GcPointer<StackFrame>;
+pub type MethodPtr = (FunctionTarget, Option<ObjectPtr>);
 
 pub type NativeFnHandle = usize;
 
@@ -29,7 +30,7 @@ pub enum Value {
     Integer(i64),
     Float(f64),
     String(StringPtr),
-    Function((FunctionTarget, Option<ObjectPtr>)),
+    Function(MethodPtr),
     Object(ObjectPtr),
 }
 
@@ -63,7 +64,7 @@ value_try_from!(bool, Value::Boolean);
 value_try_from!(i64, Value::Integer);
 value_try_from!(f64, Value::Float);
 value_try_from!(StringPtr, Value::String);
-value_try_from!((FunctionTarget, Option<ObjectPtr>), Value::Function);
+value_try_from!(MethodPtr, Value::Function);
 value_try_from!(ObjectPtr, Value::Object);
 
 impl Display for Value {

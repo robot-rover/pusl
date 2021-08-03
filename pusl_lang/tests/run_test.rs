@@ -18,6 +18,18 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     Some(code)
 }
 
+const GENERATOR_SOURCE: &'static str = include_str!("../resources/generator.pusl");
+
+#[test]
+fn generator_test() {
+    let lines = GENERATOR_SOURCE.lines();
+    let roots = lex(lines);
+    let ast = parse(roots);
+    let code = linearize_file(ast, PathBuf::from("generator.pusl"));
+    let ctx = ExecContext { resolve: |_| None };
+    startup(code, ctx);
+}
+
 #[test]
 fn small_test() {
     let lines = SMALL_SOURCE.lines();

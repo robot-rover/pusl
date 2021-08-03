@@ -17,6 +17,7 @@ use std::{
 pub mod argparse;
 pub mod builtins;
 pub mod debug;
+pub mod generator;
 pub mod linearize;
 pub mod list;
 pub mod object;
@@ -406,7 +407,6 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                                 .expect("Out of bounds function handle")
                                 .clone();
                             native_fn_call = Some((ptr, args, this));
-                            //let result = ptr(args, this, &mut state);
                         }
                         _ => panic!("Value must be a function to call"),
                     };
@@ -576,7 +576,7 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                                 name: reference_name,
                             }))
                     } else {
-                        let variable = state
+                        let variable_opt = state
                             .current_frame
                             .variables
                             .iter_mut()
@@ -588,8 +588,14 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                                     None
                                 }
                             })
-                            .find(|var| var.name == reference_name)
-                            .expect("Non-Let Assignment on undeclared variable");
+                            .find(|var| var.name == reference_name);
+                        let variable = match variable_opt {
+                            Some(variable) => variable,
+                            None => panic!(
+                                "Cannot assign to non-existing variable {} without let",
+                                reference_name
+                            ),
+                        };
                         variable.value = value;
                     }
                 }
@@ -654,6 +660,8 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                 }
                 OpCode::Yield => {
                     assert!(state.current_frame.bfunc.target.function.is_generator);
+                    let result = state.current_frame.op_stack.pop().unwrap();
+                    return result;
                 }
             }
         }

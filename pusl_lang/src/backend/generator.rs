@@ -1,43 +1,38 @@
 use crate::backend::object::{Object, Value};
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 use typemap::Key;
 
 use super::{
     argparse,
-    object::{FunctionTarget, MethodPtr, ObjectPtr},
+    object::{FnPtr, FunctionTarget, MethodPtr, ObjectPtr},
     ExecutionState, StackFrame,
 };
 
-struct GenKey<'a>;
+struct GenKey;
 
-impl<'a> Key for GenKey<'a> {
-    type Value = Option<StackFrame<'a>>;
+impl Key for GenKey {
+    type Value = (Option<StackFrame>, Option<Value>);
 }
 
-struct EndKey;
-
-impl Key for EndKey {
-    type Value = ();
+pub fn register<'a>(builtins: &mut HashMap<&str, Value>) {
+    builtins.insert("is_end", Value::native_fn(is_end, builtins));
 }
 
-pub fn register<'a>(builtins: &mut HashMap<&str, Value<'a>>) {
-    builtins.insert("is_end", Value::native_fn(is_end));
+pub fn has_next<'a>(args: Vec<Value>, this: Option<Value>, st: &'a RefCell<ExecutionState>) -> Value {
+
 }
 
-fn is_end<'a>(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value<'a> {
-    let gc_ptr: ObjectPtr = argparse::parse1(args);
-    let state = gc_ptr.borrow_mut().native_data.contains::<EndKey>();
-    Value::Boolean(state)
+pub fn next<'a>(args: Vec<Value>, this: Option<Value>, st: &'a RefCell<ExecutionState>) -> Value {
+
 }
 
-fn new_generator<'a>(args: Vec<Value>, function: Value, st: &RefCell<ExecutionState>) -> Value<'a> {
-    let (func, this) = match argparse::convert_arg::<MethodPtr>(function, 1) {
-        (FunctionTarget::Pusl(func), this) => (func, this),
-        (FunctionTarget::Native(func), _) => {
-            panic!("Cannot make generator from native function") //TODO: Better Debug
-        }
-    };
-    let frame = StackFrame::from_function(func, this, args);
+fn new_generator<'a>(
+    args: Vec<Value>,
+    function: MethodPtr,
+    this: Option<Value>,
+    st: &'a RefCell<ExecutionState>,
+) -> Value {
+    let frame = StackFrame::from_function(function, this, args);
     let object = Object::new();
     {
         let mut borrow = object.borrow_mut();
