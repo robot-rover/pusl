@@ -151,35 +151,21 @@ impl ManagedPool {
 
         println!("Dropping Unmarked");
         // Drop all non-marked objects, unmarking all objects in the process
-        // unsafe {
-        //     self.pool
-        //         .drain_filter(|obj| {
-        //             let obj = &*obj.as_ptr();
-        //             let val = !obj.flag.get();
-        //             obj.flag.set(false);
-        //             val
-        //         })
-        //         .for_each(|obj| {
-        //             Box::from_raw(obj.as_ptr());
-        //         })
-        // }
         unsafe {
-            let mut pool = Vec::new();
-            std::mem::swap(&mut pool, &mut self.pool);
-            self.pool = pool
-                .into_iter()
-                .filter_map(|obj| {
-                    let obj_ref = &*obj.as_ptr();
-                    let val = !obj_ref.flag.get();
-                    obj_ref.flag.set(false);
-                    if val {
-                        Some(obj)
-                    } else {
-                        Box::from_raw(obj.as_ptr());
-                        None
+            let mut to_drop = Vec::new();
+            self.pool.retain(|nn_ptr| {
+                    let obj = &*nn_ptr.as_ptr();
+                    let val = obj.flag.get();
+                    obj.flag.set(false);
+                    if !val {
+                        to_drop.push(*nn_ptr);
                     }
+                    val
+                });
+
+                to_drop.into_iter().for_each(|nn_ptr| {
+                    Box::from_raw(nn_ptr.as_ptr());
                 })
-                .collect()
         }
     }
 }
