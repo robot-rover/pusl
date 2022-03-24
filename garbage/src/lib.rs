@@ -143,9 +143,9 @@ impl ManagedPool {
         // For every rooted object, recursively mark all objects, stopping a branch if an object is already marked
         for anchor in anchors {
             let mut anchor = anchor.ptr.get();
-            if !unsafe { anchor.as_ref() }.flag.get() {
-                unsafe { anchor.as_mut() }.flag.set(true);
-                unsafe { anchor.as_mut() }.data.mark_children();
+            if !unsafe { anchor.as_ref() }.get_flag() {
+                unsafe { anchor.as_ref() }.set_flag(true);
+                unsafe { anchor.as_ref() }.data.mark_children();
             }
         }
 
