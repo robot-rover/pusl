@@ -247,11 +247,18 @@ fn parse_for(block: Block) -> Branch {
     );
     let mut condition_func = |it: &mut dyn Iterator<Item = Token>| {
         assert_eq!(Some(Token::Block(BlockType::For)), it.next());
-        unimplemented!()
+        let var_name = if let Some(Token::Reference(var_name)) = it.next() {
+            var_name
+        } else {
+            panic!("For Loop expects variable name")
+        };
+        assert_eq!(Some(Token::Keyword(Keyword::In)), it.next(), "For loop expects 'in' keyword");
+        let generator_expression = parse_expression(it);
+        (var_name, generator_expression)
     };
-    let (_, _) = parse_condition_body(block, &mut condition_func);
-    //    let condition = arena.insert(Eval::Expression(condition));
-    unimplemented!()
+    let ((var_name, generator_expression), body) = parse_condition_body(block, &mut condition_func);
+
+    Branch::ForLoop { variable: var_name, iterable: generator_expression, body }
 }
 
 fn parse_compare(block: Block) -> Branch {

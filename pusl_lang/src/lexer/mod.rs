@@ -202,7 +202,8 @@ fn read_symbol(line: &mut Source) -> Symbol {
         },
         '[' => OpenSquareBracket,
         ']' => CloseSquareBracket,
-
+        '&' => And,
+        '|' => Or,
         _ => panic!("Unrecognized Symbol"),
     }
 }

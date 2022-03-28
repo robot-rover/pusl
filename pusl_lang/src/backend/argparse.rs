@@ -31,6 +31,10 @@ where
     arg
 }
 
+pub fn parse0(args: Vec<Value>) {
+    validate_num_args(0..=0, args.len());
+}
+
 pub fn parse1<A>(args: Vec<Value>) -> A
 where
     A: TryFrom<Value>,
@@ -47,7 +51,7 @@ where
     A: TryFrom<Value>,
     B: TryFrom<Value>,
 {
-    validate_num_args(1..=1, args.len());
+    validate_num_args(2..=2, args.len());
     let mut arg_iter = args.into_iter();
     let arg0 = arg_iter.next().unwrap();
     let arg0 = convert_arg(arg0, 0);
@@ -62,7 +66,7 @@ where
     B: TryFrom<Value>,
     C: TryFrom<Value>,
 {
-    validate_num_args(1..=1, args.len());
+    validate_num_args(3..=3, args.len());
     let mut arg_iter = args.into_iter();
     let arg0 = arg_iter.next().unwrap();
     let arg0 = convert_arg(arg0, 0);

@@ -1,7 +1,7 @@
 use crate::backend::object::{FnPtr, Value};
 use crate::backend::object::{Object, ObjectPtr};
 use crate::backend::BoundFunction;
-use crate::lexer::token::Literal;
+use crate::lexer::token::{BlockType, Literal};
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
@@ -14,6 +14,8 @@ use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::{cell::RefCell, fmt};
+use std::env::var;
+use crate::lexer::token::LexUnit::Block;
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -154,7 +156,7 @@ impl Debug for ByteCodeFile {
             for (index, import) in self.imports.iter().enumerate() {
                 writeln!(
                     f,
-                    "\t{:3}: {} as {}",
+                    "\t{:3}; {} as {}",
                     index,
                     import.path.display(),
                     import.alias
@@ -338,11 +340,11 @@ impl Debug for Function {
         } else {
             writeln!(f, "\nLiterals:")?;
             for (index, literal) in self.literals.iter().enumerate() {
-                writeln!(f, "    {:3}: {:?}", index, literal)?;
+                writeln!(f, "    {:3}; {:?}", index, literal)?;
             }
             writeln!(f, "References:")?;
             for (index, reference) in self.references.iter().enumerate() {
-                writeln!(f, "    {:3}: {}", index, reference)?;
+                writeln!(f, "    {:3}; {}", index, reference)?;
             }
             writeln!(f, "Code:")?;
             let mut code_iter = self.code.iter().enumerate().peekable();
@@ -369,7 +371,7 @@ where
 {
     let (index, bytecode) = line;
     let op_code = bytecode.as_op();
-    write!(f, "    {:3}: ", index)?;
+    write!(f, "    {:3}; ", index)?;
     match op_code {
         OpCode::PushThis => write!(f, "PushThis")?,
         OpCode::PushSelf => write!(f, "PushSelf")?,
@@ -890,6 +892,11 @@ fn linearize_branch(branch: Branch, func: &mut BasicFunction) {
             less,
             body,
         } => linearize_compare(lhs, rhs, greater, equal, less, body, func),
+        Branch::ForLoop {
+            variable,
+            iterable,
+            body,
+        } => linearize_for(variable, iterable, body, func),
         _ => panic!(),
     }
 }
@@ -930,6 +937,45 @@ fn linearize_compare(
     indexes.into_iter().for_each(|(_, jump_out_index)| {
         func.function.code[jump_out_index].value = jump_out_to as u64
     });
+}
+
+fn linearize_for(
+    variable: String,
+    iterable: ExpRef,
+    body: ExpRef,
+    func: &mut BasicFunction,
+) {
+    linearize_exp_ref(iterable, func, true);
+    let condition_idx = func.function.current_index();
+    func.function.code.push(ByteCode::op(OpCode::Duplicate));
+    let has_next_reference = func.function.add_reference("hasNext".to_string());
+    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+    func.function.code.push(ByteCode::val(has_next_reference));
+    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
+    func.function.code.push(ByteCode::zero());
+    func.function.code.push(ByteCode::op(OpCode::Negate));
+    let store_loop_end_idx = func.function.place_jump(true);
+    func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+    // AssignReference, // 1 Stack Value (value) and 2 opcode (reference, type)
+    func.function.code.push(ByteCode::op(OpCode::Duplicate));
+    let next_reference = func.function.add_reference("next".to_string());
+    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+    func.function.code.push(ByteCode::val(next_reference));
+    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
+    func.function.code.push(ByteCode::zero());
+
+    let target_idx = func.function.add_reference(variable);
+    func.function.code.push(ByteCode::op(OpCode::AssignReference));
+    func.function.code.push(ByteCode::val(target_idx));
+    func.function.code.push(ByteCode {
+        let_assign: true,
+    });
+    linearize_exp_ref(body, func, false);
+    func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+    func.function.place_jump_to(false, condition_idx);
+
+    func.function.set_jump(store_loop_end_idx, func.function.current_index());
+    func.function.code.push(ByteCode::op(OpCode::Pop));
 }
 
 fn linearize_if_else(

@@ -4,10 +4,38 @@ let range = fn(start, end):
         yield i
         i = i + 1
 
-let gen = range(1, 10)
+print("Hello World!\n")
+
+let gen = range(0, 10)
 while gen.hasNext():
-    print(gen.next())
+    print(gen.next(), "\n")
 
 gen = range(1, 5)
-while true:
-    print(gen.next())
+let i = 1
+while i < 5:
+    print(gen.next(), "\n")
+    i = i + 1
+
+let fib = fn():
+    let a = 0
+    let b = 1
+    while true:
+        yield a + b
+        let c = a + b
+        a = b
+        b = c
+
+let i = 0
+let l = []
+let it = fib()
+while i < 15:
+    l.push(it.next())
+    i = i + 1
+
+let idx = range(0,l.len())
+while idx.hasNext():
+    print(l[idx.next()], ", ")
+print(l, "\n")
+
+for num in range(11, 15):
+    print(num, ", ")

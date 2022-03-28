@@ -2,6 +2,7 @@ use super::{BoundFunction, ExecutionState, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
+use std::cell::RefMut;
 use garbage::{GcPointer, MarkTrace};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -10,20 +11,20 @@ use typemap::TypeMap;
 
 pub type ObjectPtr = GcPointer<RefCell<Object>>;
 pub type StringPtr = GcPointer<String>;
-pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState>) -> Value;
+pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState<'a>>) -> Value;
 pub type FnPtr = GcPointer<BoundFunction>;
 pub type GeneratorFn = GcPointer<StackFrame>;
 pub type MethodPtr = (FunctionTarget, Option<ObjectPtr>);
 
 pub type NativeFnHandle = usize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FunctionTarget {
     Native(NativeFnHandle),
     Pusl(FnPtr),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Null,
     Boolean(bool),

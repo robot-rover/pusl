@@ -8,7 +8,11 @@ use std::path::Display;
 use std::rc::Rc;
 
 #[derive(Clone)]
-struct DropNotify(i32, Option<GcPointer<RefCell<DropNotify>>>, Rc<RefCell<Vec<i32>>>);
+struct DropNotify(
+    i32,
+    Option<GcPointer<RefCell<DropNotify>>>,
+    Rc<RefCell<Vec<i32>>>,
+);
 
 impl DropNotify {
     fn new(data: i32, drop_log: Rc<RefCell<Vec<i32>>>) -> Self {
@@ -23,7 +27,12 @@ impl DropNotify {
 
 impl fmt::Debug for DropNotify {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DropNotify(#{}, &{})", self.0, self.1.as_ref().map(|ptr| ptr.borrow().0).unwrap_or(-1))
+        write!(
+            f,
+            "DropNotify(#{}, &{})",
+            self.0,
+            self.1.as_ref().map(|ptr| ptr.borrow().0).unwrap_or(-1)
+        )
     }
 }
 
@@ -65,7 +74,6 @@ fn basic_gc_test() {
     println!("{}", ptr1.borrow().0);
     assert_eq!(&*drop_log.borrow(), &vec![1]);
     println!("{}", ptr1.borrow().0);
-
 
     pool.collect_garbage(std::iter::empty());
     assert_eq!(&*drop_log.borrow(), &vec![1, 2, 3]);

@@ -20,6 +20,7 @@ pub enum Branch {
     },
 
     ForLoop {
+        variable: String,
         iterable: ExpRef,
         body: ExpRef,
     },

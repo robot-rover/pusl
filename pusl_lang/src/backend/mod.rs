@@ -28,6 +28,7 @@ use linearize::{OpCode, ResolvedFunction};
 
 use self::object::{FunctionTarget, NativeFn};
 
+// TODO: Convert Self references to use bound values idx 0
 pub struct BoundFunction {
     pub bound_values: Vec<Value>,
     pub target: &'static ResolvedFunction,
@@ -237,8 +238,9 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
     execute(&rstate);
 }
 
-fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
+fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
     let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
+    let mut make_generator: Option<StackFrame> = None;
     loop {
         {
             let mut state = st.borrow_mut();
@@ -255,13 +257,13 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                     state.imports.push(resolution);
                     continue;
                 } else {
-                    return Value::Null;
+                    return (Value::Null, false);
                 }
             };
             // TODO:
-            // if true {
-            //     println!("{:?}", state);
-            // }
+            if false {
+                println!("{:?}", state);
+            }
             match current_op {
                 OpCode::Modulus => {
                     let rhs = state.current_frame.op_stack.pop().unwrap();
@@ -396,8 +398,12 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                                     .variables
                                     .push(VariableStack::Variable(Variable { value, name }));
                             }
-                            let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
-                            state.execution_stack.push(old_frame);
+                            if new_frame.bfunc.target.function.is_generator {
+                                make_generator = Some(new_frame);
+                            } else {
+                                let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
+                                state.execution_stack.push(old_frame);
+                            }
                         }
                         Value::Function((FunctionTarget::Native(handle), this)) => {
                             let this = this.map(|obj| Value::Object(obj));
@@ -512,7 +518,7 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                         state.imports.push(resolution);
                         continue;
                     } else {
-                        return return_value;
+                        return (return_value, false);
                     }
                 }
                 OpCode::ConditionalJump => {
@@ -661,12 +667,16 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> Value {
                 OpCode::Yield => {
                     assert!(state.current_frame.bfunc.target.function.is_generator);
                     let result = state.current_frame.op_stack.pop().unwrap();
-                    return result;
+                    return (result, true);
                 }
             }
         }
         if let Some((ptr, args, this)) = native_fn_call.take() {
             let result = ptr(args, this, st);
+            st.borrow_mut().current_frame.op_stack.push(result);
+        }
+        if let Some(stack_frame) = make_generator.take() {
+            let result = generator::new_generator(stack_frame, st);
             st.borrow_mut().current_frame.op_stack.push(result);
         }
     }

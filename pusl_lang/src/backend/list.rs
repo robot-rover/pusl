@@ -1,6 +1,7 @@
 use crate::backend::object::{Object, Value};
 use std::{cell::RefCell, collections::HashMap};
 use typemap::{Key, TypeMap};
+use crate::backend::argparse;
 
 use super::{
     object::{NativeFn, NativeFnHandle},
@@ -18,6 +19,7 @@ struct ListBuiltin {
     push_index: NativeFnHandle,
     list_index_get: NativeFnHandle,
     list_index_set: NativeFnHandle,
+    list_len: NativeFnHandle,
 }
 
 impl Key for ListBuiltin {
@@ -34,10 +36,12 @@ pub fn register(
         push_index: Value::native_fn_handle(list_push, registry),
         list_index_get: Value::native_fn_handle(list_index_get, registry),
         list_index_set: Value::native_fn_handle(list_index_set, registry),
+        list_len: Value::native_fn_handle(list_len, registry),
     });
 }
 
 fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+    // TODO: Inherit from one master list instead
     let object = Object::new();
     {
         let mut borrow = object.borrow_mut();
@@ -52,6 +56,10 @@ fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) ->
         borrow.let_field(
             String::from("push"),
             Value::native_fn_index(handles.push_index),
+        );
+        borrow.let_field(
+            String::from("len"),
+            Value::native_fn_index(handles.list_len),
         );
         borrow.let_field(
             String::from("@index_get"),
@@ -84,6 +92,12 @@ fn list_push(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionSta
     assert!(args.is_empty());
     get_list_vec(&this, |vec| vec.push(value));
     Value::Null
+}
+
+fn list_len(args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+    argparse::parse0(args);
+    let len = get_list_vec(&this, |vec| vec.len());
+    Value::Integer(len as i64)
 }
 
 fn list_index_get(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {

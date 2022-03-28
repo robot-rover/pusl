@@ -4,7 +4,7 @@ use super::{
     object::{NativeFn, ObjectPtr},
     ExecutionState,
 };
-use crate::backend::argparse;
+use crate::backend::{argparse, generator};
 use crate::backend::list;
 use crate::backend::object::{Object, Value};
 use std::{cell::RefCell, collections::HashMap};
@@ -18,6 +18,7 @@ pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Valu
     map.insert("Object", Value::native_fn(new_object, registry));
 
     list::register(&mut map, registry, &mut data_map);
+    generator::register(&mut map, registry, &mut data_map);
 
     (map, data_map)
 }

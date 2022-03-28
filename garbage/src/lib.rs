@@ -142,7 +142,7 @@ impl ManagedPool {
         println!("Recursive Marking");
         // For every rooted object, recursively mark all objects, stopping a branch if an object is already marked
         for anchor in anchors {
-            let mut anchor = anchor.ptr.get();
+            let anchor = anchor.ptr.get();
             if !unsafe { anchor.as_ref() }.get_flag() {
                 unsafe { anchor.as_ref() }.set_flag(true);
                 unsafe { anchor.as_ref() }.data.mark_children();
@@ -154,18 +154,18 @@ impl ManagedPool {
         unsafe {
             let mut to_drop = Vec::new();
             self.pool.retain(|nn_ptr| {
-                    let obj = &*nn_ptr.as_ptr();
-                    let val = obj.flag.get();
-                    obj.flag.set(false);
-                    if !val {
-                        to_drop.push(*nn_ptr);
-                    }
-                    val
-                });
+                let obj = &*nn_ptr.as_ptr();
+                let val = obj.flag.get();
+                obj.flag.set(false);
+                if !val {
+                    to_drop.push(*nn_ptr);
+                }
+                val
+            });
 
-                to_drop.into_iter().for_each(|nn_ptr| {
-                    Box::from_raw(nn_ptr.as_ptr());
-                })
+            to_drop.into_iter().for_each(|nn_ptr| {
+                Box::from_raw(nn_ptr.as_ptr());
+            })
         }
     }
 }
