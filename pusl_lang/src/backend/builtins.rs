@@ -1,4 +1,3 @@
-use typemap::TypeMap;
 
 use super::{
     object::{NativeFn, ObjectPtr},
@@ -6,12 +5,13 @@ use super::{
 };
 use crate::backend::{argparse, generator};
 use crate::backend::list;
-use crate::backend::object::{Object, Value};
+use crate::backend::object::{Object, ObjectStatic, PuslObject, Value};
 use std::{cell::RefCell, collections::HashMap};
+use anymap::AnyMap;
 
-pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Value>, TypeMap) {
+pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Value>, AnyMap) {
     let mut map = HashMap::new();
-    let mut data_map = TypeMap::new();
+    let mut data_map = AnyMap::new();
     map.insert("type_of", Value::native_fn(type_of, registry));
     map.insert("print", Value::native_fn(print, registry));
     map.insert("native", Value::native_fn(native_import, registry));
@@ -51,11 +51,11 @@ fn new_object(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) 
     let super_obj: Option<ObjectPtr> = argparse::parse_option(args);
 
     let object_ptr = if let Some(super_obj) = super_obj {
-        Object::new_with_parent(super_obj)
+        PuslObject::new_with_parent(super_obj)
     } else {
-        Object::new()
+        PuslObject::new()
     };
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object_ptr);
+    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object_ptr) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }

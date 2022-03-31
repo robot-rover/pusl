@@ -1,4 +1,4 @@
-use crate::backend::object::{FnPtr, Value};
+use crate::backend::object::{FnPtr, ObjectStatic, PuslObject, Value};
 use crate::backend::object::{Object, ObjectPtr};
 use crate::backend::BoundFunction;
 use crate::lexer::token::{BlockType, Literal};
@@ -281,8 +281,8 @@ impl BasicFunction {
                 .find(|i| &i.0 == &path)
                 .map(|i| i.1.clone())
                 .unwrap();
-            let import_object = Object::new_with_parent(import_parent);
-            let import_ptr = gc.borrow_mut().place_in_heap(import_object);
+            let import_object = PuslObject::new_with_parent(import_parent);
+            let import_ptr = gc.borrow_mut().place_in_heap(import_object) as ObjectPtr;
             imports.push((alias, import_ptr));
         }
 

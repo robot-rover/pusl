@@ -1,18 +1,53 @@
-use crate::backend::object::{Object, Value};
-use std::{cell::RefCell, collections::HashMap};
-use typemap::{Key, TypeMap};
+use crate::backend::object::{NativeFnHandle, Object, ObjectPtr, Value};
+use std::{cell::RefCell, collections::HashMap, fmt};
+use std::any::Any;
+use std::fmt::{Debug, Formatter};
+use anymap::AnyMap;
+use garbage::MarkTrace;
 use crate::backend::argparse;
 
 use super::{
-    object::{NativeFn, NativeFnHandle},
+    object::{NativeFn},
     ExecutionState,
 };
 
-struct ListKey;
+struct List { vec: Vec<Value>, fn_table: ListBuiltin }
 
-impl Key for ListKey {
-    type Value = Vec<Value>;
+impl Debug for List {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("List")
+            .field("vec", &self.vec)
+            .finish_non_exhaustive()
+    }
 }
+
+impl MarkTrace for List {
+    fn mark_children(&self) {
+        for value in self.vec.iter() {
+            value.mark_children()
+        }
+    }
+}
+
+impl Object for List {
+    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+        panic!("Cannot Assign to list primitive")
+    }
+
+    fn get_field(&self, name: &str) -> Value {
+        let list_builtin = &self.fn_table;
+        match name {
+            "push" => Value::native_fn_index(list_builtin.push_index),
+            "len" => Value::native_fn_index(list_builtin.list_len),
+            "@index_get" => Value::native_fn_index(list_builtin.list_index_get),
+            "@index_set" => Value::native_fn_index(list_builtin.list_index_set),
+            _ => panic!("Unknown field"),
+        }
+    }
+
+    impl_native_data!();
+}
+
 
 #[derive(Copy, Clone)]
 struct ListBuiltin {
@@ -22,14 +57,10 @@ struct ListBuiltin {
     list_len: NativeFnHandle,
 }
 
-impl Key for ListBuiltin {
-    type Value = ListBuiltin;
-}
-
 pub fn register(
     builtins: &mut HashMap<&str, Value>,
     registry: &mut Vec<NativeFn>,
-    data_map: &mut TypeMap,
+    data_map: &mut AnyMap,
 ) {
     builtins.insert("List", Value::native_fn(new_list, registry));
     data_map.insert::<ListBuiltin>(ListBuiltin {
@@ -41,46 +72,22 @@ pub fn register(
 }
 
 fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
-    // TODO: Inherit from one master list instead
-    let object = Object::new();
-    {
-        let mut borrow = object.borrow_mut();
-        borrow.native_data.insert::<ListKey>(args);
-        let handles = st
-            .borrow()
-            .builtin_data
-            .get::<ListBuiltin>()
-            .expect("List Builtin not Initialized")
-            .clone();
-        //TODO: This should be handled with a super object instead
-        borrow.let_field(
-            String::from("push"),
-            Value::native_fn_index(handles.push_index),
-        );
-        borrow.let_field(
-            String::from("len"),
-            Value::native_fn_index(handles.list_len),
-        );
-        borrow.let_field(
-            String::from("@index_get"),
-            Value::native_fn_index(handles.list_index_get),
-        );
-        borrow.let_field(
-            String::from("@index_set"),
-            Value::native_fn_index(handles.list_index_set),
-        );
-    }
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object);
+    let list_builtins = *st.borrow().builtin_data.get::<ListBuiltin>().expect("List Builtins are not loaded");
+    let object = RefCell::new(List { vec: args, fn_table: list_builtins});
+
+    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }
 
 fn get_list_vec<R, T: FnOnce(&mut Vec<Value>) -> R>(object: &Option<Value>, action: T) -> R {
     if let Some(Value::Object(gc_ptr)) = object {
-        if let Some(vec) = gc_ptr.borrow_mut().native_data.get_mut::<ListKey>() {
-            action(vec)
+        let mut gc_borrow = gc_ptr.borrow_mut();
+        let type_data = gc_borrow.get_native_data_mut().downcast_mut::<List>();
+        if let Some(vec) = type_data {
+            action(&mut vec.vec)
         } else {
-            panic!("Object is not a List")
+            panic!("Object is not a List: {:?}", gc_borrow)
         }
     } else {
         panic!("Argument is not an Object")

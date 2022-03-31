@@ -1,26 +1,74 @@
 use crate::backend::object::Value::{Boolean, Null};
-use crate::backend::object::{NativeFn, NativeFnHandle, Object, Value};
-use crate::backend::{BoundFunction, execute, Variable, VariableStack};
-use garbage::GcPointer;
+use crate::backend::object::{NativeFn, NativeFnHandle, Object, ObjectStatic, PuslObject, Value};
+use crate::backend::{BoundFunction, execute, generator, Variable, VariableStack};
+use garbage::{Gc, MarkTrace};
 use std::{cell::RefCell, collections::HashMap};
+use std::any::Any;
 use std::convert::{TryFrom, TryInto};
-use typemap::{Key, TypeMap};
+use std::fmt::{Debug, Formatter};
+use anymap::AnyMap;
 
 use super::argparse;
 use super::object::ObjectPtr;
 use super::ExecutionState;
 use super::StackFrame;
 
-struct GenKey;
-
-impl Key for GenKey {
-    type Value = (Option<StackFrame>, Option<Value>);
+struct Generator {
+    stack: Option<StackFrame>,
+    next_val: Option<Value>,
+    fn_table: GeneratorBuiltin,
 }
 
-struct GenIterEnd;
+impl MarkTrace for Generator {
+    fn mark_children(&self) {
+        // TODO:
+        // self.stack.map(|stack| stack)
+        self.next_val.as_ref().map(|val| val.mark_children());
+    }
+}
 
-impl Key for GenIterEnd {
-    type Value = ();
+impl Debug for Generator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Generator")
+            .field("stack", &self.stack)
+            .field("next_val", &self.next_val)
+            .finish_non_exhaustive()
+    }
+}
+
+impl Object for Generator {
+    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+        panic!("Cannot Assign to generator primitive")
+    }
+
+    fn get_field(&self, name: &str) -> Value {
+        match name {
+            "hasNext" => Value::native_fn_index(self.fn_table.has_next),
+            "next" => Value::native_fn_index(self.fn_table.next),
+            _ => panic!("Unknown field"),
+        }
+    }
+
+    impl_native_data!();
+}
+
+#[derive(Debug)]
+struct IterationEnd;
+
+impl MarkTrace for IterationEnd {
+    fn mark_children(&self) {}
+}
+
+impl Object for IterationEnd {
+    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+        panic!("Cannot Assign to Iteration End primitive")
+    }
+
+    fn get_field(&self, name: &str) -> Value {
+        panic!("Unknown field: '{}'", name)
+    }
+
+    impl_native_data!();
 }
 
 #[derive(Copy, Clone)]
@@ -29,11 +77,7 @@ struct GeneratorBuiltin {
     next: NativeFnHandle,
 }
 
-impl Key for GeneratorBuiltin {
-    type Value = GeneratorBuiltin;
-}
-
-pub fn register<'a>(builtins: &mut HashMap<&str, Value>, registry: &mut Vec<NativeFn>, data_map: &mut TypeMap) {
+pub fn register<'a>(builtins: &mut HashMap<&str, Value>, registry: &mut Vec<NativeFn>, data_map: &mut AnyMap) {
     builtins.insert("is_end", Value::native_fn(is_end, registry));
     data_map.insert::<GeneratorBuiltin>(GeneratorBuiltin {
         has_next:  Value::native_fn_handle(has_next, registry),
@@ -42,54 +86,36 @@ pub fn register<'a>(builtins: &mut HashMap<&str, Value>, registry: &mut Vec<Nati
 }
 
 pub fn new_generator(stack_frame: StackFrame, st: &RefCell<ExecutionState>) -> Value {
-    let object = Object::new();
-    {
-        let mut borrow = object.borrow_mut();
-        borrow.native_data.insert::<GenKey>((Some(stack_frame), None));
-        let handles = st
-            .borrow()
-            .builtin_data
-            .get::<GeneratorBuiltin>()
-            .expect("Generator Builtin not Initialized")
-            .clone();
-        //TODO: This should be handled with a super object instead
-        borrow.let_field(
-            String::from("hasNext"),
-            Value::native_fn_index(handles.has_next),
-        );
-        borrow.let_field(
-            String::from("next"),
-            Value::native_fn_index(handles.next),
-        );
-    }
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object);
+    let generator_builtins = *st.borrow().builtin_data.get::<GeneratorBuiltin>().expect("Generator Builtins are not loaded");
+    let object = RefCell::new(Generator { stack: Some(stack_frame), next_val: None, fn_table: generator_builtins});
+    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }
 
 fn is_end(args: Vec<Value>, this: Option<Value>, _st: &RefCell<ExecutionState>) -> Value {
-    assert_eq!(this, Option::<Value>::None);
+    assert!(this.is_none());
     let obj: Value = argparse::parse1(args);
     Boolean(check_is_end(&obj))
 }
 
 fn check_is_end(value: &Value) -> bool {
-    match value {
-        Value::Object(ptr) => ptr.borrow().native_data.contains::<GenIterEnd>(),
-        _ => false
+    if let Value::Object(ptr) = value {
+        ptr.borrow().get_native_data().is::<IterationEnd>()
+    } else {
+        false
     }
 }
 
 fn create_end(args: Vec<Value>, this: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
-    assert_eq!(this, None);
+    assert!(this.is_none());
     argparse::parse0(args);
     assemble_end(st)
 }
 
 fn assemble_end(st: &RefCell<ExecutionState>) -> Value {
-    let object = Object::new();
-    object.borrow_mut().native_data.insert::<GenIterEnd>(());
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object);
+    let object = RefCell::new(IterationEnd);
+    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }
@@ -97,20 +123,20 @@ fn assemble_end(st: &RefCell<ExecutionState>) -> Value {
 fn has_next<'a: 'b, 'b>(args: Vec<Value>, this: Option<Value>, st: &'a RefCell<ExecutionState<'b>>) -> Value {
     argparse::parse0(args);
     if let Some(Value::Object(obj_ptr)) = &this {
-        if let Some((stack, next_data)) = obj_ptr.borrow_mut().native_data.get_mut::<GenKey>() {
-            let data = if let Some(to_return) = next_data {
-                to_return.clone()
+        if let Some(generator) = obj_ptr.borrow_mut().get_native_data_mut().downcast_mut::<Generator>() {
+            let has_next = if let Some(next_val) = &generator.next_val {
+                !check_is_end(next_val)
             } else {
-                let (value, did_yield) = run_frame(stack.as_mut().expect("No stack in generator object"), st);
-                if !did_yield {
-                    *next_data = Some(assemble_end(st));
-                    return Value::Boolean(false);
+                let (value, did_yield) = run_frame(generator.stack.as_mut().expect("No stack in generator object"), st);
+                if did_yield {
+                    generator.next_val = Some(value);
+                    true
+                } else {
+                    generator.next_val = Some(assemble_end(st));
+                    false
                 }
-                *next_data = Some(value.clone());
-                value
             };
-            let end = ObjectPtr::try_from(data).map(|obj_ptr| obj_ptr.borrow().native_data.contains::<GenIterEnd>()).unwrap_or(false);
-            Value::Boolean(!end)
+            Value::Boolean(has_next)
         } else {
             panic!("Object is not a generator");
         }
@@ -139,26 +165,25 @@ fn run_frame<'a: 'b, 'b>(frame: &mut StackFrame, st: &'a RefCell<ExecutionState<
 pub fn next<'a>(args: Vec<Value>, this: Option<Value>, st: &'a RefCell<ExecutionState<'a>>) -> Value {
     argparse::parse0(args);
     if let Some(Value::Object(obj_ptr)) = &this {
-        if let Some((stack, next_data)) = obj_ptr.borrow_mut().native_data.get_mut::<GenKey>() {
-            let stack = stack.as_mut().expect("No stack in generator object");
-            let data = if let Some(to_return) = next_data.take() {
-                if check_is_end(&to_return) {
-                    *next_data = Some(to_return.clone());
+        if let Some(generator) = obj_ptr.borrow_mut().get_native_data_mut().downcast_mut::<Generator>() {
+            if let Some(next_val) = generator.next_val.take() {
+                if check_is_end(&next_val) {
+                    generator.next_val = Some(assemble_end(st));
                 }
-                to_return
+                next_val
             } else {
-                let (value, is_yield) = run_frame(stack, st);
-                if !is_yield {
-                    panic!("Iterator out of elements");
+                let (value, did_yield) = run_frame(generator.stack.as_mut().expect("No stack in generator object"), st);
+                if did_yield {
+                    value
+                } else {
+                    generator.next_val = Some(assemble_end(st));
+                    assemble_end(st)
                 }
-                value
-            };
-            data
+            }
         } else {
             panic!("Object is not a generator");
         }
     } else {
         panic!("this is not an object")
     }
-
 }

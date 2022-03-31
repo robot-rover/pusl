@@ -1,27 +1,34 @@
+#![feature(unsize)]
+#![feature(coerce_unsized)]
+#![feature(dispatch_from_dyn)]
+
 use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::fmt::Formatter;
-use std::marker::PhantomData;
-use std::ops::Deref;
+use std::marker::{PhantomData, Unsize};
+use std::ops::{CoerceUnsized, Deref, DispatchFromDyn};
 use std::ptr::NonNull;
-use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct GcPointer<T: MarkTrace + ?Sized> {
-    ptr: Cell<NonNull<ManagedData<T>>>,
-    marker: PhantomData<Rc<T>>,
+pub struct Gc<T: MarkTrace + ?Sized> {
+    ptr: NonNull<ManagedData<T>>,
+    marker: PhantomData<ManagedData<T>>,
 }
 
-impl<T: MarkTrace + ?Sized + 'static> PartialEq for GcPointer<T> {
+// Needed to coerce Gc<RefCell<T>> -> Gc<RefCell<dyn Trait>> for T: Trait
+impl<T: ?Sized + Unsize<U> + MarkTrace, U: ?Sized + MarkTrace> CoerceUnsized<Gc<U>> for Gc<T> {}
+impl<T: ?Sized + Unsize<U> + MarkTrace, U: ?Sized + MarkTrace> DispatchFromDyn<Gc<U>> for Gc<T> {}
+
+impl<T: MarkTrace + ?Sized + 'static> PartialEq for Gc<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr.get() == other.ptr.get()
+        self.ptr == other.ptr
     }
 }
 
-impl<T: MarkTrace + ?Sized + 'static> GcPointer<T> {
+impl<T: MarkTrace + ?Sized + 'static> Gc<T> {
     pub fn mark_recurse(&self) {
         unsafe {
-            let managed_box: &ManagedData<T> = &*self.ptr.get().as_ptr();
+            let managed_box: &ManagedData<T> = self.ptr.as_ref();
             if !managed_box.get_flag() {
                 managed_box.set_flag(true);
                 managed_box.data.mark_children();
@@ -30,37 +37,29 @@ impl<T: MarkTrace + ?Sized + 'static> GcPointer<T> {
     }
 
     fn new(ptr: NonNull<ManagedData<T>>) -> Self {
-        GcPointer {
-            ptr: Cell::new(ptr),
+        Gc {
+            ptr,
             marker: PhantomData,
         }
     }
 
     pub fn write_addr(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:p}", self.ptr.get().as_ptr())
+        write!(f, "{:p}", self.ptr)
     }
 }
 
-impl<T: MarkTrace + 'static> From<GcPointer<T>> for GcPointer<dyn MarkTrace> {
-    fn from(concrete: GcPointer<T>) -> Self {
-        GcPointer::new(concrete.ptr.get())
-    }
-}
-
-impl<T: MarkTrace + 'static> Deref for GcPointer<T> {
+impl<T: MarkTrace + ?Sized + 'static> Deref for Gc<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        let test = self.ptr.get().as_ptr();
-        let t2 = unsafe { &*test };
-        &t2.data
+        unsafe { &self.ptr.as_ref().data }
     }
 }
 
-impl<T: MarkTrace + ?Sized> Clone for GcPointer<T> {
+impl<T: MarkTrace + ?Sized> Clone for Gc<T> {
     fn clone(&self) -> Self {
-        GcPointer {
-            ptr: Cell::new(self.ptr.get()),
+        Gc {
+            ptr: self.ptr,
             marker: PhantomData,
         }
     }
@@ -110,12 +109,15 @@ impl<T: MarkTrace + ?Sized + 'static> ManagedData<T> {
         self.flag.get()
     }
 
-    fn wrap_data<S: MarkTrace + 'static>(data: S) -> NonNull<ManagedData<S>> {
+}
+
+impl<T: MarkTrace + 'static> ManagedData<T> {
+    fn wrap_data(data: T) -> NonNull<ManagedData<T>> {
         let contents = ManagedData {
             flag: Cell::new(false),
-            data,
+            data: data,
         };
-        unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(contents))) }
+        NonNull::new(Box::into_raw(Box::new(contents))).unwrap()
     }
 }
 
@@ -129,23 +131,24 @@ impl ManagedPool {
         ManagedPool { pool: Vec::new() }
     }
 
-    pub fn place_in_heap<T: MarkTrace + 'static>(&mut self, data: T) -> GcPointer<T> {
-        let managed_box = ManagedData::<T>::wrap_data(data);
-        self.pool.push(managed_box);
-        GcPointer::new(managed_box)
+    pub fn place_in_heap<T: MarkTrace + 'static>(&mut self, data: T) -> Gc<T> {
+        let managed_box: NonNull<ManagedData<T>> = ManagedData::<T>::wrap_data(data);
+        let into_pool: NonNull<ManagedData<dyn MarkTrace>> = managed_box;
+        self.pool.push(into_pool);
+        Gc::new(managed_box)
     }
 
     pub fn collect_garbage<'a, I>(&mut self, anchors: I)
     where
-        I: IntoIterator<Item = &'a GcPointer<dyn MarkTrace>>,
+        I: IntoIterator<Item = &'a Gc<dyn MarkTrace>>,
     {
         println!("Recursive Marking");
         // For every rooted object, recursively mark all objects, stopping a branch if an object is already marked
         for anchor in anchors {
-            let anchor = anchor.ptr.get();
-            if !unsafe { anchor.as_ref() }.get_flag() {
-                unsafe { anchor.as_ref() }.set_flag(true);
-                unsafe { anchor.as_ref() }.data.mark_children();
+            let anchor = unsafe { anchor.ptr.as_ref() };
+            if !anchor.get_flag() {
+                anchor.set_flag(true);
+                anchor.data.mark_children();
             }
         }
 

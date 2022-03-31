@@ -1,6 +1,6 @@
 extern crate garbage;
 
-use garbage::{GcPointer, ManagedPool, MarkTrace};
+use garbage::{Gc, ManagedPool, MarkTrace};
 use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::fmt::Formatter;
@@ -10,7 +10,7 @@ use std::rc::Rc;
 #[derive(Clone)]
 struct DropNotify(
     i32,
-    Option<GcPointer<RefCell<DropNotify>>>,
+    Option<Gc<RefCell<DropNotify>>>,
     Rc<RefCell<Vec<i32>>>,
 );
 
@@ -20,7 +20,7 @@ impl DropNotify {
         DropNotify(data, None, drop_log)
     }
 
-    fn set_ptr(&mut self, ptr: GcPointer<RefCell<DropNotify>>) {
+    fn set_ptr(&mut self, ptr: Gc<RefCell<DropNotify>>) {
         self.1 = Some(ptr)
     }
 }
@@ -68,7 +68,7 @@ fn basic_gc_test() {
 
     println!("{}", ptr1.borrow().0);
 
-    let anchors: Vec<GcPointer<dyn MarkTrace>> = vec![ptr2.into()];
+    let anchors: Vec<Gc<dyn MarkTrace>> = vec![ptr2.into()];
     println!("{}", ptr1.borrow().0);
     pool.collect_garbage(anchors.iter());
     println!("{}", ptr1.borrow().0);

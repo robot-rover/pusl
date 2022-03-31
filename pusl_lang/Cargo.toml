@@ -9,7 +9,7 @@ garbage = { path = "../garbage", version = "0.1.0"}
 generational-arena = "0.2.6"
 bitflags = "1.2.1"
 serde = { version = "1.0.104", features = ["derive"] }
-typemap = "0.3.3"
+anymap = "0.12.1"
 log = "0.4.8"
 pad-adapter = "0.1.1"
 

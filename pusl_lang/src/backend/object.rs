@@ -2,18 +2,19 @@ use super::{BoundFunction, ExecutionState, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
-use std::cell::RefMut;
-use garbage::{GcPointer, MarkTrace};
+use std::any::{Any, TypeId};
+use std::cell::Ref;
+use garbage::{Gc, MarkTrace};
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt;
-use typemap::TypeMap;
+use std::fmt::Debug;
 
-pub type ObjectPtr = GcPointer<RefCell<Object>>;
-pub type StringPtr = GcPointer<String>;
+pub type ObjectPtr = Gc<RefCell<dyn Object>>;
+pub type StringPtr = Gc<String>;
 pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState<'a>>) -> Value;
-pub type FnPtr = GcPointer<BoundFunction>;
-pub type GeneratorFn = GcPointer<StackFrame>;
+pub type FnPtr = Gc<BoundFunction>;
+pub type GeneratorFn = Gc<StackFrame>;
 pub type MethodPtr = (FunctionTarget, Option<ObjectPtr>);
 
 pub type NativeFnHandle = usize;
@@ -24,7 +25,7 @@ pub enum FunctionTarget {
     Pusl(FnPtr),
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Value {
     Null,
     Boolean(bool),
@@ -103,8 +104,8 @@ impl Value {
             Value::Integer(_) => "Integer",
             Value::Float(_) => "Float",
             Value::String(_) => "String",
-            Value::Function((FunctionTarget::Pusl(_), _)) => "Pusl Function",
-            Value::Function((FunctionTarget::Native(_), _)) => "Native Function",
+            Value::Function((FunctionTarget::Pusl(_), _)) => "Pusl_Function",
+            Value::Function((FunctionTarget::Native(_), _)) => "Native_Function",
             Value::Object(_) => "Object",
         }
     }
@@ -142,7 +143,7 @@ impl MarkTrace for Value {
     }
 }
 
-impl MarkTrace for Object {
+impl MarkTrace for PuslObject {
     fn mark_children(&self) {
         if let Some(super_ptr) = &self.super_ptr {
             super_ptr.mark_recurse();
@@ -156,13 +157,12 @@ impl MarkTrace for Object {
 }
 
 //Todo: The debug impl really should be custom
-pub struct Object {
+pub struct PuslObject {
     super_ptr: Option<ObjectPtr>,
     fields: HashMap<String, Value>,
-    pub native_data: TypeMap,
 }
 
-impl std::fmt::Debug for Object {
+impl std::fmt::Debug for PuslObject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Object")
             .field("super_ptr", &self.super_ptr)
@@ -171,46 +171,71 @@ impl std::fmt::Debug for Object {
     }
 }
 
-impl Object {
-    pub fn new() -> RefCell<Self> {
-        let object = Object {
+pub trait ObjectStatic {
+    fn new() -> RefCell<Self>;
+    fn new_with_parent(parent: ObjectPtr) -> RefCell<Self>;
+}
+
+pub trait Object: MarkTrace + Debug {
+    fn assign_field(&mut self, name: &str, value: Value, is_let: bool);
+    fn get_field(&self, name: &str) -> Value;
+    fn get_native_data(&self) -> &dyn Any;
+    fn get_native_data_mut(&mut self) -> &mut dyn Any;
+}
+
+macro_rules! impl_native_data {
+    () => {
+        fn get_native_data(&self) -> &dyn Any {
+            self
+        }
+        fn get_native_data_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+    }
+}
+
+impl ObjectStatic for PuslObject {
+    fn new() -> RefCell<Self> {
+        let object = PuslObject {
             super_ptr: None,
             fields: HashMap::new(),
-            native_data: TypeMap::new(),
         };
         RefCell::new(object)
     }
 
-    pub fn new_with_parent(parent: ObjectPtr) -> RefCell<Self> {
-        let object = Object {
+    fn new_with_parent(parent: ObjectPtr) -> RefCell<Self> {
+        let object = PuslObject {
             super_ptr: Some(parent),
             fields: HashMap::new(),
-            native_data: TypeMap::new(),
         };
         RefCell::new(object)
     }
+}
 
-    pub fn get_field(object: &ObjectPtr, name: &str) -> Value {
+impl Object for PuslObject {
+    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+        if is_let {
+            self.fields.insert(name.to_string(), value);
+        } else {
+            let entry = self.fields.get_mut(name);
+            if let Some(old_value) = entry {
+                *old_value = value;
+            } else {
+                panic!("Cannot assign to non-existent field without let")
+            }
+        }
+    }
+
+    fn get_field(&self, name: &str) -> Value {
         //TODO: Bad Recursion
-        if let Some(value) = object.borrow().fields.get(name).map(|val| (*val).clone()) {
+        if let Some(value) = self.fields.get(name).map(|val| (*val).clone()) {
             value
-        } else if let Some(super_ptr) = &object.borrow().super_ptr {
-            Object::get_field(super_ptr, name)
+        } else if let Some(super_ptr) = &self.super_ptr {
+            super_ptr.borrow().get_field(name)
         } else {
             Value::Null
         }
     }
 
-    pub fn let_field(&mut self, name: String, value: Value) {
-        self.fields.insert(name, value);
-    }
-
-    pub fn assign_field(&mut self, name: &str, value: Value) {
-        let entry = self.fields.get_mut(name);
-        if let Some(old_value) = entry {
-            *old_value = value;
-        } else {
-            panic!("Cannot assign to non-existent field without let")
-        }
-    }
+    impl_native_data!();
 }

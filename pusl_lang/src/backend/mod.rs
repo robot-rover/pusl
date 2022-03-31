@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use garbage::{GcPointer, ManagedPool, MarkTrace};
-use typemap::TypeMap;
+use garbage::{Gc, ManagedPool, MarkTrace};
+use anymap::AnyMap;
 
 use crate::backend::linearize::ByteCodeFile;
-use crate::backend::object::{Object, ObjectPtr, Value};
+use crate::backend::object::{FnPtr, Object, ObjectPtr, ObjectStatic, PuslObject, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -14,16 +14,19 @@ use std::{
     sync::mpsc::{Receiver, Sender},
 };
 
+#[macro_use]
+pub mod object;
 pub mod argparse;
 pub mod builtins;
 pub mod debug;
 pub mod generator;
 pub mod linearize;
 pub mod list;
-pub mod object;
 
 use debug::{DebugCommand, DebugResponse};
 use fmt::Formatter;
+use std::ops::Deref;
+use std::rc::Rc;
 use linearize::{OpCode, ResolvedFunction};
 
 use self::object::{FunctionTarget, NativeFn};
@@ -75,16 +78,17 @@ struct Variable {
     name: String,
 }
 
+#[derive(Debug)]
 pub struct StackFrame {
-    this_obj: Option<GcPointer<RefCell<Object>>>,
-    bfunc: GcPointer<BoundFunction>,
+    this_obj: Option<ObjectPtr>,
+    bfunc: FnPtr,
     variables: Vec<VariableStack>,
     op_stack: Vec<Value>,
     index: usize,
 }
 
 impl StackFrame {
-    fn from_function(bfunc: GcPointer<BoundFunction>, this_obj: Option<ObjectPtr>) -> Self {
+    fn from_function(bfunc: FnPtr, this_obj: Option<ObjectPtr>) -> Self {
         StackFrame {
             this_obj,
             bfunc,
@@ -94,8 +98,10 @@ impl StackFrame {
         }
     }
 
-    fn from_file(bfunc: GcPointer<BoundFunction>, gc: &RefCell<ManagedPool>) -> (Self, ObjectPtr) {
-        let new_object = gc.borrow_mut().place_in_heap(Object::new());
+    fn from_file(bfunc: FnPtr, gc: &RefCell<ManagedPool>) -> (Self, ObjectPtr) {
+        let to_insert = PuslObject::new();
+        let new_object = gc.borrow_mut().place_in_heap(to_insert) as Gc<RefCell<dyn Object>>;
+
         let frame = StackFrame {
             this_obj: Some(new_object.clone()),
             bfunc,
@@ -166,7 +172,7 @@ pub struct ExecutionState<'a> {
     resolve_stack: Vec<ByteCodeFile>,
     gc: RefCell<ManagedPool>,
     builtins: HashMap<&'static str, Value>,
-    builtin_data: TypeMap,
+    builtin_data: AnyMap,
     registry: Vec<NativeFn<'a>>,
 }
 
@@ -261,8 +267,9 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                 }
             };
             // TODO:
-            if false {
+            if true {
                 println!("{:?}", state);
+                println!("{:?}", &state.current_frame.op_stack);
             }
             match current_op {
                 OpCode::Modulus => {
@@ -428,7 +435,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         .get_reference(name_index);
                     let value = match value {
                         Value::Object(object) => {
-                            let value = Object::get_field(&object, name.as_str());
+                            let value = object.deref().borrow().get_field(name.as_str());
                             match value {
                                 Value::Function((target, None)) => {
                                     Value::Function((target, Some(object)))
@@ -621,11 +628,11 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     };
 
                     if is_let {
-                        (*object).borrow_mut().let_field(reference_name, value);
+                        (*object).borrow_mut().assign_field(reference_name.as_str(), value, true);
                     } else {
                         (*object)
                             .borrow_mut()
-                            .assign_field(reference_name.as_str(), value);
+                            .assign_field(reference_name.as_str(), value, false);
                     }
                 }
                 OpCode::DuplicateMany => {

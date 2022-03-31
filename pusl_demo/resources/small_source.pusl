@@ -3,7 +3,7 @@ import foo.bar as foobar
 
 let a = null ?: 45 + 4.5 / 2
 
-let mt = []
+let mt = [1.0]
 print(mt[0])
 let array = ["l33t", 433110, 1.25]
 
