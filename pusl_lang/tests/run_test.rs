@@ -26,7 +26,6 @@ fn generator_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast, PathBuf::from("generator.pusl"));
-    println!("Code:\n{:#?}", code);
     let ctx = ExecContext { resolve: |_| None };
     startup(code, ctx);
 }

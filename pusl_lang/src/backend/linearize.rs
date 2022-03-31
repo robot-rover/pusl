@@ -13,7 +13,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
-use std::{cell::RefCell, fmt};
+use std::{cell::RefCell, env, fmt};
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -573,11 +573,15 @@ impl Function {
 pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
     let ParsedFile { expr, imports } = file;
     let func = linearize(expr, vec![], vec![]);
-    ByteCodeFile {
+    let bcf = ByteCodeFile {
         file: path,
         base_func: func,
         imports,
+    };
+    if env::var("PUSL_TRACE_CODE").is_ok() {
+        println!("Code:\n{:#?}", &bcf)
     }
+    bcf
 }
 
 fn linearize(expr: ExpRef, args: Vec<String>, binds: Vec<String>) -> BasicFunction {

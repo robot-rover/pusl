@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, env};
 
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
@@ -263,8 +263,12 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
             };
             // TODO:
             if true {
-                println!("{:?}", state);
-                println!("{:?}", &state.current_frame.op_stack);
+                if env::var("PUSL_TRACE").is_ok() {
+                    println!("{:?}", state);
+                }
+                if env::var("PUSL_TRACE_VAR").is_ok() {
+                    println!("{:?}", &state.current_frame.op_stack);
+                }
             }
             match current_op {
                 OpCode::Modulus => {
