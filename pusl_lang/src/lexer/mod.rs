@@ -30,13 +30,13 @@ impl IndentChar {
         }
     }
 
-    fn compare(old: &Vec<IndentChar>, new: &Vec<IndentChar>) -> Option<cmp::Ordering> {
+    fn compare(old: &[IndentChar], new: &[IndentChar]) -> Option<cmp::Ordering> {
         for (old_char, new_char) in old.iter().zip(new.iter()) {
             if old_char != new_char {
                 return None;
             }
         }
-        return Some(old.len().cmp(&new.len()));
+        Some(old.len().cmp(&new.len()))
     }
 }
 
@@ -129,7 +129,7 @@ fn read_identifier(line: &mut Source) -> String {
 // TODO: Hex Literals
 fn read_numeric_literal(line: &mut Source) -> Literal {
     let result = peek_while(line, |&c| c.is_digit(10) || c == '.').collect::<String>();
-    if result.contains(".") {
+    if result.contains('.') {
         Literal::Float(result.parse().unwrap())
     } else {
         Literal::Integer(result.parse().unwrap())
@@ -259,7 +259,7 @@ fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
                 "yield" => Some(Token::Keyword(Keyword::Yield)),
                 _ => None,
             }
-            .unwrap_or_else(|| Token::Reference(ident));
+            .unwrap_or(Token::Reference(ident));
             tokens.push(token);
         } else if c.is_digit(10) {
             tokens.push(Token::Literal(read_numeric_literal(&mut cursor)));

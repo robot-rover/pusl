@@ -1,10 +1,10 @@
-use crate::backend::object::Value::{Boolean, Null};
-use crate::backend::object::{NativeFn, NativeFnHandle, Object, ObjectStatic, PuslObject, Value};
-use crate::backend::{BoundFunction, execute, generator, Variable, VariableStack};
-use garbage::{Gc, MarkTrace};
+use crate::backend::object::Value::{Boolean};
+use crate::backend::object::{NativeFn, NativeFnHandle, Object, Value};
+use crate::backend::{execute};
+use garbage::{MarkTrace};
 use std::{cell::RefCell, collections::HashMap};
 use std::any::Any;
-use std::convert::{TryFrom, TryInto};
+
 use std::fmt::{Debug, Formatter};
 use anymap::AnyMap;
 
@@ -23,7 +23,9 @@ impl MarkTrace for Generator {
     fn mark_children(&self) {
         // TODO:
         // self.stack.map(|stack| stack)
-        self.next_val.as_ref().map(|val| val.mark_children());
+        if let Some(val) = &self.next_val {
+            val.mark_children()
+        }
     }
 }
 
@@ -37,7 +39,7 @@ impl Debug for Generator {
 }
 
 impl Object for Generator {
-    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+    fn assign_field(&mut self, _name: &str, _value: Value, _is_let: bool) {
         panic!("Cannot Assign to generator primitive")
     }
 
@@ -60,7 +62,7 @@ impl MarkTrace for IterationEnd {
 }
 
 impl Object for IterationEnd {
-    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+    fn assign_field(&mut self, _name: &str, _value: Value, _is_let: bool) {
         panic!("Cannot Assign to Iteration End primitive")
     }
 
@@ -77,7 +79,7 @@ struct GeneratorBuiltin {
     next: NativeFnHandle,
 }
 
-pub fn register<'a>(builtins: &mut HashMap<&str, Value>, registry: &mut Vec<NativeFn>, data_map: &mut AnyMap) {
+pub fn register(builtins: &mut HashMap<&str, Value>, registry: &mut Vec<NativeFn>, data_map: &mut AnyMap) {
     builtins.insert("is_end", Value::native_fn(is_end, registry));
     data_map.insert::<GeneratorBuiltin>(GeneratorBuiltin {
         has_next:  Value::native_fn_handle(has_next, registry),
@@ -105,12 +107,6 @@ fn check_is_end(value: &Value) -> bool {
     } else {
         false
     }
-}
-
-fn create_end(args: Vec<Value>, this: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
-    assert!(this.is_none());
-    argparse::parse0(args);
-    assemble_end(st)
 }
 
 fn assemble_end(st: &RefCell<ExecutionState>) -> Value {

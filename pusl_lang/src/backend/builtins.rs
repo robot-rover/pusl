@@ -5,7 +5,7 @@ use super::{
 };
 use crate::backend::{argparse, generator};
 use crate::backend::list;
-use crate::backend::object::{Object, ObjectStatic, PuslObject, Value};
+use crate::backend::object::{PuslObject, Value};
 use std::{cell::RefCell, collections::HashMap};
 use anymap::AnyMap;
 

@@ -1,7 +1,7 @@
-use crate::backend::object::{FnPtr, ObjectStatic, PuslObject, Value};
-use crate::backend::object::{Object, ObjectPtr};
+use crate::backend::object::{FnPtr, PuslObject, Value};
+use crate::backend::object::{ObjectPtr};
 use crate::backend::BoundFunction;
-use crate::lexer::token::{BlockType, Literal};
+use crate::lexer::token::{Literal};
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
@@ -14,8 +14,8 @@ use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::{cell::RefCell, fmt};
-use std::env::var;
-use crate::lexer::token::LexUnit::Block;
+
+
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -278,7 +278,7 @@ impl BasicFunction {
         for Import { path, alias } in target_imports {
             let import_parent: ObjectPtr = iter
                 .by_ref()
-                .find(|i| &i.0 == &path)
+                .find(|i| i.0 == path)
                 .map(|i| i.1.clone())
                 .unwrap();
             let import_object = PuslObject::new_with_parent(import_parent);
@@ -349,9 +349,9 @@ impl Debug for Function {
             writeln!(f, "Code:")?;
             let mut code_iter = self.code.iter().enumerate().peekable();
             while let Some(tuple) = code_iter.next() {
-                write_bytecode_line(tuple, f, &mut code_iter, &self)?;
+                write_bytecode_line(tuple, f, &mut code_iter, self)?;
                 if code_iter.peek().is_some() {
-                    writeln!(f, "")?;
+                    writeln!(f)?;
                 }
             }
         }

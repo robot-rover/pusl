@@ -1,10 +1,10 @@
 extern crate garbage;
 
 use garbage::{Gc, ManagedPool, MarkTrace};
-use std::cell::{Cell, RefCell};
+use std::cell::{RefCell};
 use std::fmt;
 use std::fmt::Formatter;
-use std::path::Display;
+
 use std::rc::Rc;
 
 #[derive(Clone)]

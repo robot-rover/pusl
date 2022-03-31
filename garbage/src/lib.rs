@@ -115,7 +115,7 @@ impl<T: MarkTrace + 'static> ManagedData<T> {
     fn wrap_data(data: T) -> NonNull<ManagedData<T>> {
         let contents = ManagedData {
             flag: Cell::new(false),
-            data: data,
+            data,
         };
         NonNull::new(Box::into_raw(Box::new(contents))).unwrap()
     }
@@ -170,6 +170,12 @@ impl ManagedPool {
                 Box::from_raw(nn_ptr.as_ptr());
             })
         }
+    }
+}
+
+impl Default for ManagedPool {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

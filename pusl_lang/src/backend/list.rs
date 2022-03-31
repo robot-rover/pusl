@@ -1,7 +1,7 @@
 use crate::backend::object::{NativeFnHandle, Object, ObjectPtr, Value};
 use std::{cell::RefCell, collections::HashMap, fmt};
 use std::any::Any;
-use std::fmt::{Debug, Formatter};
+use std::fmt::{Debug};
 use anymap::AnyMap;
 use garbage::MarkTrace;
 use crate::backend::argparse;
@@ -30,7 +30,7 @@ impl MarkTrace for List {
 }
 
 impl Object for List {
-    fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
+    fn assign_field(&mut self, _name: &str, _value: Value, _is_let: bool) {
         panic!("Cannot Assign to list primitive")
     }
 

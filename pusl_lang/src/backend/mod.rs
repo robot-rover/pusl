@@ -4,14 +4,13 @@ use garbage::{Gc, ManagedPool, MarkTrace};
 use anymap::AnyMap;
 
 use crate::backend::linearize::ByteCodeFile;
-use crate::backend::object::{FnPtr, Object, ObjectPtr, ObjectStatic, PuslObject, Value};
+use crate::backend::object::{FnPtr, Object, ObjectPtr, PuslObject, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
 use std::{
     fmt::{self, Debug},
-    sync::mpsc::{Receiver, Sender},
 };
 
 #[macro_use]
@@ -23,10 +22,10 @@ pub mod generator;
 pub mod linearize;
 pub mod list;
 
-use debug::{DebugCommand, DebugResponse};
+
 use fmt::Formatter;
 use std::ops::Deref;
-use std::rc::Rc;
+
 use linearize::{OpCode, ResolvedFunction};
 
 use self::object::{FunctionTarget, NativeFn};
@@ -163,8 +162,6 @@ fn process_bcf(
     (current_frame, (file, import_object))
 }
 
-type DebugTuple = (Receiver<DebugCommand>, Sender<DebugResponse>);
-
 pub struct ExecutionState<'a> {
     imports: Vec<(PathBuf, ObjectPtr)>,
     execution_stack: Vec<StackFrame>,
@@ -213,7 +210,7 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
         for import in &resolve_stack[index].imports {
             if !resolve_stack.iter().any(|bcf| bcf.file == import.path) {
                 let new_bcf = resolve(import.path.clone())
-                    .expect(format!("Unable to resolve import {}", import.path.display()).as_str());
+                    .unwrap_or_else(|| panic!("Unable to resolve import {}", import.path.display()));
                 append.push(new_bcf);
             }
         }
@@ -348,7 +345,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                                 .map(|(_, obj)| Value::Object(obj.clone()))
                         })
                         .or_else(|| state.builtins.get(reference_name.as_str()).cloned())
-                        .expect(format!("Undeclared Variable \"{}\"", reference_name).as_str());
+                        .unwrap_or_else(|| panic!("Undeclared Variable \"{}\"", reference_name.as_str()));
                     state.current_frame.op_stack.push(value);
                 }
                 OpCode::PushFunction => {
@@ -373,7 +370,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                                 })
                                 .find(|var| &var.name == name)
                                 .map(|var| var.value.clone())
-                                .expect(format!("Undeclared Variable \"{}\"", name).as_str())
+                                .unwrap_or_else(|| panic!("Undeclared Variable \"{}\"", name))
                         })
                         .collect();
 
@@ -414,11 +411,10 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         }
                         Value::Function((FunctionTarget::Native(handle), this)) => {
                             let this = this.map(|obj| Value::Object(obj));
-                            let ptr = state
+                            let ptr = *state
                                 .registry
                                 .get(handle)
-                                .expect("Out of bounds function handle")
-                                .clone();
+                                .expect("Out of bounds function handle");
                             native_fn_call = Some((ptr, args, this));
                         }
                         _ => panic!("Value must be a function to call"),
@@ -563,7 +559,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                 }
                 OpCode::IsNull => {
                     let value = state.current_frame.op_stack.pop().unwrap();
-                    let is_null = if let Value::Null = value { true } else { false };
+                    let is_null = matches!(value, Value::Null);
                     state.current_frame.op_stack.push(Value::Boolean(is_null));
                 }
                 OpCode::Duplicate => {
@@ -639,10 +635,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     let n = state.current_frame.get_val();
                     let len = state.current_frame.op_stack.len();
                     assert!(n <= len);
-                    let mut range = state.current_frame.op_stack[(len - n)..len]
-                        .iter()
-                        .map(|val| val.clone())
-                        .collect();
+                    let mut range = state.current_frame.op_stack[(len - n)..len].to_vec();
                     state.current_frame.op_stack.append(&mut range);
                 }
                 OpCode::PushBuiltin => {
@@ -724,7 +717,7 @@ fn modulus(lhs: Value, rhs: Value) -> Value {
     } else {
         panic!("Modulus only works with Integral operands")
     };
-    return Value::Integer(lhs % rhs);
+    Value::Integer(lhs % rhs)
 }
 
 #[inline]
@@ -849,13 +842,7 @@ fn compare(lhs: Value, rhs: Value, compare: Compare) -> Value {
 
     let result = if let Some(invert) = equality {
         let is_equal = match lhs {
-            Value::Null => {
-                if let Value::Null = rhs {
-                    true
-                } else {
-                    false
-                }
-            }
+            Value::Null => matches!(rhs, Value::Null),
             Value::Boolean(lhs) => {
                 if let Value::Boolean(rhs) = rhs {
                     lhs == rhs

@@ -133,7 +133,7 @@ fn main() -> io::Result<()> {
         )
         .get_matches();
 
-    let verbosity = matches.occurrences_of("v");
+    let _verbosity = matches.occurrences_of("v");
 
     match matches.subcommand() {
         // ("compile", Some(matches)) => {

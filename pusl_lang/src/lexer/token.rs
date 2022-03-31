@@ -101,7 +101,7 @@ impl LexUnit {
                 for _ in 0..indent {
                     write!(f, "\t")?;
                 }
-                write!(f, "{:?}\n", tokens)
+                writeln!(f, "{:?}", tokens)
             }
             LexUnit::Block(block) => block.fmt_indent(f, indent),
         }
@@ -113,7 +113,7 @@ impl Block {
         for _ in 0..indent {
             write!(f, "\t")?;
         }
-        write!(f, "{:?}\n", self.line)?;
+        writeln!(f, "{:?}", self.line)?;
         for child in &self.children {
             child.fmt_indent(f, indent + 1)?
         }

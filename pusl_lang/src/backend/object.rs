@@ -2,8 +2,8 @@ use super::{BoundFunction, ExecutionState, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
-use std::any::{Any, TypeId};
-use std::cell::Ref;
+use std::any::{Any};
+
 use garbage::{Gc, MarkTrace};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -136,9 +136,7 @@ impl Value {
 
 impl MarkTrace for Value {
     fn mark_children(&self) {
-        match self {
-            Value::Object(object) => object.mark_recurse(),
-            _ => {}
+            if let Value::Object(object) = self { object.mark_recurse()
         }
     }
 }
@@ -171,11 +169,6 @@ impl std::fmt::Debug for PuslObject {
     }
 }
 
-pub trait ObjectStatic {
-    fn new() -> RefCell<Self>;
-    fn new_with_parent(parent: ObjectPtr) -> RefCell<Self>;
-}
-
 pub trait Object: MarkTrace + Debug {
     fn assign_field(&mut self, name: &str, value: Value, is_let: bool);
     fn get_field(&self, name: &str) -> Value;
@@ -194,8 +187,8 @@ macro_rules! impl_native_data {
     }
 }
 
-impl ObjectStatic for PuslObject {
-    fn new() -> RefCell<Self> {
+impl PuslObject {
+    pub fn new() -> RefCell<Self> {
         let object = PuslObject {
             super_ptr: None,
             fields: HashMap::new(),
@@ -203,7 +196,7 @@ impl ObjectStatic for PuslObject {
         RefCell::new(object)
     }
 
-    fn new_with_parent(parent: ObjectPtr) -> RefCell<Self> {
+    pub fn new_with_parent(parent: ObjectPtr) -> RefCell<Self> {
         let object = PuslObject {
             super_ptr: Some(parent),
             fields: HashMap::new(),
