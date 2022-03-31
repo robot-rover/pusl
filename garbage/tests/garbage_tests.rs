@@ -1,18 +1,14 @@
 extern crate garbage;
 
 use garbage::{Gc, ManagedPool, MarkTrace};
-use std::cell::{RefCell};
+use std::cell::RefCell;
 use std::fmt;
 use std::fmt::Formatter;
 
 use std::rc::Rc;
 
 #[derive(Clone)]
-struct DropNotify(
-    i32,
-    Option<Gc<RefCell<DropNotify>>>,
-    Rc<RefCell<Vec<i32>>>,
-);
+struct DropNotify(i32, Option<Gc<RefCell<DropNotify>>>, Rc<RefCell<Vec<i32>>>);
 
 impl DropNotify {
     fn new(data: i32, drop_log: Rc<RefCell<Vec<i32>>>) -> Self {
@@ -44,10 +40,10 @@ impl Drop for DropNotify {
 }
 
 impl MarkTrace for DropNotify {
-    fn mark_children(&self) {
+    fn mark_trace(&self) {
         println!("#{} Marking Children", self.0);
         if let Some(ptr) = &self.1 {
-            ptr.mark_recurse()
+            ptr.mark_trace()
         }
     }
 }

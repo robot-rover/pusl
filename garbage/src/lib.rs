@@ -26,16 +26,6 @@ impl<T: MarkTrace + ?Sized + 'static> PartialEq for Gc<T> {
 }
 
 impl<T: MarkTrace + ?Sized + 'static> Gc<T> {
-    pub fn mark_recurse(&self) {
-        unsafe {
-            let managed_box: &ManagedData<T> = self.ptr.as_ref();
-            if !managed_box.get_flag() {
-                managed_box.set_flag(true);
-                managed_box.data.mark_children();
-            }
-        }
-    }
-
     fn new(ptr: NonNull<ManagedData<T>>) -> Self {
         Gc {
             ptr,
@@ -45,6 +35,18 @@ impl<T: MarkTrace + ?Sized + 'static> Gc<T> {
 
     pub fn write_addr(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{:p}", self.ptr)
+    }
+}
+
+impl<T: MarkTrace + 'static> MarkTrace for Gc<T> {
+    fn mark_trace(&self) {
+        unsafe {
+            let managed_box: &ManagedData<T> = self.ptr.as_ref();
+            if !managed_box.get_flag() {
+                managed_box.set_flag(true);
+                managed_box.data.mark_trace();
+            }
+        }
     }
 }
 
@@ -66,30 +68,30 @@ impl<T: MarkTrace + ?Sized> Clone for Gc<T> {
 }
 
 pub trait MarkTrace {
-    /// Call mark_recurse on all children
-    fn mark_children(&self);
+    /// Call mark_trace on all children
+    fn mark_trace(&self);
 }
 
 impl<T: MarkTrace + ?Sized + 'static> MarkTrace for dyn Deref<Target = T> {
-    fn mark_children(&self) {
-        self.deref().mark_children();
+    fn mark_trace(&self) {
+        self.deref().mark_trace();
     }
 }
 
 impl<T: MarkTrace + ?Sized + 'static> MarkTrace for RefCell<T> {
-    fn mark_children(&self) {
-        self.borrow().mark_children();
+    fn mark_trace(&self) {
+        self.borrow().mark_trace();
     }
 }
 
 impl MarkTrace for String {
-    fn mark_children(&self) {}
+    fn mark_trace(&self) {}
 }
 
 impl<T: MarkTrace> MarkTrace for Vec<T> {
-    fn mark_children(&self) {
+    fn mark_trace(&self) {
         for item in self {
-            item.mark_children();
+            item.mark_trace();
         }
     }
 }
@@ -108,7 +110,6 @@ impl<T: MarkTrace + ?Sized + 'static> ManagedData<T> {
     fn get_flag(&self) -> bool {
         self.flag.get()
     }
-
 }
 
 impl<T: MarkTrace + 'static> ManagedData<T> {
@@ -148,7 +149,7 @@ impl ManagedPool {
             let anchor = unsafe { anchor.ptr.as_ref() };
             if !anchor.get_flag() {
                 anchor.set_flag(true);
-                anchor.data.mark_children();
+                anchor.data.mark_trace();
             }
         }
 

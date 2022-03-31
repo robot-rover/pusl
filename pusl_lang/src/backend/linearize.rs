@@ -1,7 +1,7 @@
+use crate::backend::object::ObjectPtr;
 use crate::backend::object::{FnPtr, PuslObject, Value};
-use crate::backend::object::{ObjectPtr};
 use crate::backend::BoundFunction;
-use crate::lexer::token::{Literal};
+use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::expression::{Compare, Expression};
@@ -14,8 +14,6 @@ use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
 use std::{cell::RefCell, fmt};
-
-
 
 #[derive(Copy, Clone, Debug)]
 // Top is Rhs (Bottom is lhs and calculated first)
@@ -939,12 +937,7 @@ fn linearize_compare(
     });
 }
 
-fn linearize_for(
-    variable: String,
-    iterable: ExpRef,
-    body: ExpRef,
-    func: &mut BasicFunction,
-) {
+fn linearize_for(variable: String, iterable: ExpRef, body: ExpRef, func: &mut BasicFunction) {
     linearize_exp_ref(iterable, func, true);
     let condition_idx = func.function.current_index();
     func.function.code.push(ByteCode::op(OpCode::Duplicate));
@@ -965,16 +958,17 @@ fn linearize_for(
     func.function.code.push(ByteCode::zero());
 
     let target_idx = func.function.add_reference(variable);
-    func.function.code.push(ByteCode::op(OpCode::AssignReference));
+    func.function
+        .code
+        .push(ByteCode::op(OpCode::AssignReference));
     func.function.code.push(ByteCode::val(target_idx));
-    func.function.code.push(ByteCode {
-        let_assign: true,
-    });
+    func.function.code.push(ByteCode { let_assign: true });
     linearize_exp_ref(body, func, false);
     func.function.code.push(ByteCode::op(OpCode::ScopeDown));
     func.function.place_jump_to(false, condition_idx);
 
-    func.function.set_jump(store_loop_end_idx, func.function.current_index());
+    func.function
+        .set_jump(store_loop_end_idx, func.function.current_index());
     func.function.code.push(ByteCode::op(OpCode::Pop));
 }
 

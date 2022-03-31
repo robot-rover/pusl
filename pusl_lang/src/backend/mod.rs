@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap};
 
-use garbage::{Gc, ManagedPool, MarkTrace};
 use anymap::AnyMap;
+use garbage::{Gc, ManagedPool, MarkTrace};
 
 use crate::backend::linearize::ByteCodeFile;
 use crate::backend::object::{FnPtr, Object, ObjectPtr, PuslObject, Value};
@@ -9,9 +9,7 @@ use crate::parser::expression::Compare;
 use std::cmp::Ordering;
 use std::path::PathBuf;
 
-use std::{
-    fmt::{self, Debug},
-};
+use std::fmt::{self, Debug};
 
 #[macro_use]
 pub mod object;
@@ -21,7 +19,6 @@ pub mod debug;
 pub mod generator;
 pub mod linearize;
 pub mod list;
-
 
 use fmt::Formatter;
 use std::ops::Deref;
@@ -37,10 +34,10 @@ pub struct BoundFunction {
 }
 
 impl MarkTrace for BoundFunction {
-    fn mark_children(&self) {
+    fn mark_trace(&self) {
         self.bound_values
             .iter()
-            .for_each(|value| value.mark_children())
+            .for_each(|value| value.mark_trace())
     }
 }
 
@@ -209,8 +206,9 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
         let mut append = Vec::new();
         for import in &resolve_stack[index].imports {
             if !resolve_stack.iter().any(|bcf| bcf.file == import.path) {
-                let new_bcf = resolve(import.path.clone())
-                    .unwrap_or_else(|| panic!("Unable to resolve import {}", import.path.display()));
+                let new_bcf = resolve(import.path.clone()).unwrap_or_else(|| {
+                    panic!("Unable to resolve import {}", import.path.display())
+                });
                 append.push(new_bcf);
             }
         }
@@ -345,7 +343,9 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                                 .map(|(_, obj)| Value::Object(obj.clone()))
                         })
                         .or_else(|| state.builtins.get(reference_name.as_str()).cloned())
-                        .unwrap_or_else(|| panic!("Undeclared Variable \"{}\"", reference_name.as_str()));
+                        .unwrap_or_else(|| {
+                            panic!("Undeclared Variable \"{}\"", reference_name.as_str())
+                        });
                     state.current_frame.op_stack.push(value);
                 }
                 OpCode::PushFunction => {
@@ -405,7 +405,8 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                             if new_frame.bfunc.target.function.is_generator {
                                 make_generator = Some(new_frame);
                             } else {
-                                let old_frame = std::mem::replace(&mut state.current_frame, new_frame);
+                                let old_frame =
+                                    std::mem::replace(&mut state.current_frame, new_frame);
                                 state.execution_stack.push(old_frame);
                             }
                         }
@@ -624,7 +625,9 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     };
 
                     if is_let {
-                        (*object).borrow_mut().assign_field(reference_name.as_str(), value, true);
+                        (*object)
+                            .borrow_mut()
+                            .assign_field(reference_name.as_str(), value, true);
                     } else {
                         (*object)
                             .borrow_mut()

@@ -1,13 +1,12 @@
-
 use super::{
     object::{NativeFn, ObjectPtr},
     ExecutionState,
 };
-use crate::backend::{argparse, generator};
 use crate::backend::list;
 use crate::backend::object::{PuslObject, Value};
-use std::{cell::RefCell, collections::HashMap};
+use crate::backend::{argparse, generator};
 use anymap::AnyMap;
+use std::{cell::RefCell, collections::HashMap};
 
 pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Value>, AnyMap) {
     let mut map = HashMap::new();

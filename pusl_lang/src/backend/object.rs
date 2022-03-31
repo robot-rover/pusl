@@ -2,7 +2,7 @@ use super::{BoundFunction, ExecutionState, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
-use std::any::{Any};
+use std::any::Any;
 
 use garbage::{Gc, MarkTrace};
 use std::collections::HashMap;
@@ -135,20 +135,21 @@ impl Value {
 }
 
 impl MarkTrace for Value {
-    fn mark_children(&self) {
-            if let Value::Object(object) = self { object.mark_recurse()
+    fn mark_trace(&self) {
+        if let Value::Object(object) = self {
+            object.mark_trace()
         }
     }
 }
 
 impl MarkTrace for PuslObject {
-    fn mark_children(&self) {
+    fn mark_trace(&self) {
         if let Some(super_ptr) = &self.super_ptr {
-            super_ptr.mark_recurse();
+            super_ptr.mark_trace();
         }
         self.fields.iter().for_each(|(_, v)| {
             if let Value::Object(ptr) = v {
-                ptr.mark_recurse();
+                ptr.mark_trace();
             }
         })
     }
@@ -184,7 +185,7 @@ macro_rules! impl_native_data {
         fn get_native_data_mut(&mut self) -> &mut dyn Any {
             self
         }
-    }
+    };
 }
 
 impl PuslObject {

@@ -252,13 +252,21 @@ fn parse_for(block: Block) -> Branch {
         } else {
             panic!("For Loop expects variable name")
         };
-        assert_eq!(Some(Token::Keyword(Keyword::In)), it.next(), "For loop expects 'in' keyword");
+        assert_eq!(
+            Some(Token::Keyword(Keyword::In)),
+            it.next(),
+            "For loop expects 'in' keyword"
+        );
         let generator_expression = parse_expression(it);
         (var_name, generator_expression)
     };
     let ((var_name, generator_expression), body) = parse_condition_body(block, &mut condition_func);
 
-    Branch::ForLoop { variable: var_name, iterable: generator_expression, body }
+    Branch::ForLoop {
+        variable: var_name,
+        iterable: generator_expression,
+        body,
+    }
 }
 
 fn parse_compare(block: Block) -> Branch {

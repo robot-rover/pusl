@@ -1,17 +1,17 @@
+use crate::backend::argparse;
 use crate::backend::object::{NativeFnHandle, Object, ObjectPtr, Value};
-use std::{cell::RefCell, collections::HashMap, fmt};
-use std::any::Any;
-use std::fmt::{Debug};
 use anymap::AnyMap;
 use garbage::MarkTrace;
-use crate::backend::argparse;
+use std::any::Any;
+use std::fmt::Debug;
+use std::{cell::RefCell, collections::HashMap, fmt};
 
-use super::{
-    object::{NativeFn},
-    ExecutionState,
-};
+use super::{object::NativeFn, ExecutionState};
 
-struct List { vec: Vec<Value>, fn_table: ListBuiltin }
+struct List {
+    vec: Vec<Value>,
+    fn_table: ListBuiltin,
+}
 
 impl Debug for List {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -22,9 +22,9 @@ impl Debug for List {
 }
 
 impl MarkTrace for List {
-    fn mark_children(&self) {
+    fn mark_trace(&self) {
         for value in self.vec.iter() {
-            value.mark_children()
+            value.mark_trace()
         }
     }
 }
@@ -47,7 +47,6 @@ impl Object for List {
 
     impl_native_data!();
 }
-
 
 #[derive(Copy, Clone)]
 struct ListBuiltin {
@@ -72,8 +71,15 @@ pub fn register(
 }
 
 fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
-    let list_builtins = *st.borrow().builtin_data.get::<ListBuiltin>().expect("List Builtins are not loaded");
-    let object = RefCell::new(List { vec: args, fn_table: list_builtins});
+    let list_builtins = *st
+        .borrow()
+        .builtin_data
+        .get::<ListBuiltin>()
+        .expect("List Builtins are not loaded");
+    let object = RefCell::new(List {
+        vec: args,
+        fn_table: list_builtins,
+    });
 
     let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
 
