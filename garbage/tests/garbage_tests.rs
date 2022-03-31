@@ -68,7 +68,7 @@ fn basic_gc_test() {
 
     println!("{}", ptr1.borrow().0);
 
-    let anchors: Vec<Gc<dyn MarkTrace>> = vec![ptr2.into()];
+    let anchors: Vec<Gc<dyn MarkTrace>> = vec![ptr2 as Gc<dyn MarkTrace>];
     println!("{}", ptr1.borrow().0);
     pool.collect_garbage(anchors.iter());
     println!("{}", ptr1.borrow().0);
