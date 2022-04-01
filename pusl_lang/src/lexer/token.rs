@@ -14,13 +14,13 @@ pub enum Literal {
 }
 
 impl Literal {
-    pub fn into_value(self, gc: &RefCell<ManagedPool>) -> Value {
+    pub fn into_value(self, gc: &mut ManagedPool) -> Value {
         match self {
             Literal::Boolean(value) => Value::Boolean(value),
             Literal::Integer(value) => Value::Integer(value),
             Literal::Float(value) => Value::Float(value),
             Literal::String(value) => {
-                let gc_ptr = gc.borrow_mut().place_in_heap(value);
+                let gc_ptr = gc.place_in_heap(value);
                 Value::String(gc_ptr)
             }
             Literal::Null => Value::Null,

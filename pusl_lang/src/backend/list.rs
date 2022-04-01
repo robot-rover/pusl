@@ -81,7 +81,7 @@ fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) ->
         fn_table: list_builtins,
     });
 
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
+    let gc_ptr = st.borrow_mut().gc.place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }

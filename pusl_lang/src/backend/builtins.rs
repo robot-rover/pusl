@@ -25,11 +25,7 @@ pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Valu
 fn type_of(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
     let value: Value = argparse::parse1(args);
     let type_string = value.type_string();
-    let gc_ptr = st
-        .borrow()
-        .gc
-        .borrow_mut()
-        .place_in_heap(type_string.to_owned());
+    let gc_ptr = st.borrow_mut().gc.place_in_heap(type_string.to_owned());
     Value::String(gc_ptr)
 }
 
@@ -54,7 +50,7 @@ fn new_object(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) 
     } else {
         PuslObject::new()
     };
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object_ptr) as ObjectPtr;
+    let gc_ptr = st.borrow_mut().gc.place_in_heap(object_ptr) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }

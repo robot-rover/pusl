@@ -205,12 +205,12 @@ impl ResolvedFunction {
         &self.sub_functions[pool_index]
     }
 
-    pub fn bind(&'static self, bound_values: Vec<Value>, gc: &RefCell<ManagedPool>) -> FnPtr {
+    pub fn bind(&'static self, bound_values: Vec<Value>, gc: &mut ManagedPool) -> FnPtr {
         let bfunc = BoundFunction {
             target: self,
             bound_values,
         };
-        gc.borrow_mut().place_in_heap(bfunc)
+        gc.place_in_heap(bfunc)
     }
 }
 
@@ -262,7 +262,7 @@ impl BasicFunction {
         self,
         global_imports: I,
         target_imports: Vec<Import>,
-        gc: &RefCell<ManagedPool>,
+        gc: &mut ManagedPool,
     ) -> &'static ResolvedFunction
     where
         I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
@@ -280,7 +280,7 @@ impl BasicFunction {
                 .map(|i| i.1.clone())
                 .unwrap();
             let import_object = PuslObject::new_with_parent(import_parent);
-            let import_ptr = gc.borrow_mut().place_in_heap(import_object) as ObjectPtr;
+            let import_ptr = gc.place_in_heap(import_object) as ObjectPtr;
             imports.push((alias, import_ptr));
         }
 

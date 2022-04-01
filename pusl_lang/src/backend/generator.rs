@@ -102,7 +102,7 @@ pub fn new_generator(stack_frame: StackFrame, st: &RefCell<ExecutionState>) -> V
         next_val: None,
         fn_table: generator_builtins,
     });
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
+    let gc_ptr = st.borrow_mut().gc.place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }
@@ -123,7 +123,7 @@ fn check_is_end(value: &Value) -> bool {
 
 fn assemble_end(st: &RefCell<ExecutionState>) -> Value {
     let object = RefCell::new(IterationEnd);
-    let gc_ptr = st.borrow().gc.borrow_mut().place_in_heap(object) as ObjectPtr;
+    let gc_ptr = st.borrow_mut().gc.place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }

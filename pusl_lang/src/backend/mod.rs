@@ -94,9 +94,9 @@ impl StackFrame {
         }
     }
 
-    fn from_file(bfunc: FnPtr, gc: &RefCell<ManagedPool>) -> (Self, ObjectPtr) {
+    fn from_file(bfunc: FnPtr, gc: &mut ManagedPool) -> (Self, ObjectPtr) {
         let to_insert = PuslObject::new();
-        let new_object = gc.borrow_mut().place_in_heap(to_insert) as Gc<RefCell<dyn Object>>;
+        let new_object = gc.place_in_heap(to_insert) as Gc<RefCell<dyn Object>>;
 
         let frame = StackFrame {
             this_obj: Some(new_object.clone()),
@@ -146,7 +146,7 @@ impl Default for ExecContext {
 fn process_bcf(
     bcf: ByteCodeFile,
     resolved_imports: &Vec<(PathBuf, ObjectPtr)>,
-    gc: &RefCell<ManagedPool>,
+    gc: &mut ManagedPool,
 ) -> (StackFrame, (PathBuf, ObjectPtr)) {
     let ByteCodeFile {
         file,
@@ -164,7 +164,7 @@ pub struct ExecutionState<'a> {
     execution_stack: Vec<StackFrame>,
     current_frame: StackFrame,
     resolve_stack: Vec<ByteCodeFile>,
-    gc: RefCell<ManagedPool>,
+    gc: ManagedPool,
     builtins: HashMap<&'static str, Value>,
     builtin_data: AnyMap,
     registry: Vec<NativeFn<'a>>,
@@ -217,10 +217,10 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
     }
 
     //TODO: Can we remove this refcell now?
-    let gc = RefCell::new(ManagedPool::new());
+    let mut gc = ManagedPool::new();
 
     let top = resolve_stack.pop().unwrap();
-    let (current_frame, resolution) = process_bcf(top, &resolved_imports, &gc);
+    let (current_frame, resolution) = process_bcf(top, &resolved_imports, &mut gc);
     resolved_imports.push(resolution);
 
     let state = ExecutionState {
@@ -253,7 +253,10 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     state.current_frame = parent_frame;
                     continue;
                 } else if let Some(parent_frame) = state.resolve_stack.pop() {
-                    let (frame, resolution) = process_bcf(parent_frame, &state.imports, &state.gc);
+                    let (frame, resolution) = {
+                        let ExecutionState { imports, gc, .. } = &mut *state;
+                        process_bcf(parent_frame, imports, gc)
+                    };
                     state.current_frame = frame;
                     state.imports.push(resolution);
                     continue;
@@ -261,15 +264,14 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     return (Value::Null, false);
                 }
             };
-            // TODO:
-            if true {
-                if env::var("PUSL_TRACE").is_ok() {
-                    println!("{:?}", state);
-                }
-                if env::var("PUSL_TRACE_VAR").is_ok() {
-                    println!("{:?}", &state.current_frame.op_stack);
-                }
+
+            if env::var("PUSL_TRACE").is_ok() {
+                println!("{:?}", state);
             }
+            if env::var("PUSL_TRACE_VAR").is_ok() {
+                println!("{:?}", &state.current_frame.op_stack);
+            }
+
             match current_op {
                 OpCode::Modulus => {
                     let rhs = state.current_frame.op_stack.pop().unwrap();
@@ -284,7 +286,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         .target
                         .function
                         .get_literal(pool_index);
-                    let value = literal.into_value(&state.gc);
+                    let value = literal.into_value(&mut state.gc);
                     state.current_frame.op_stack.push(value);
                 }
                 OpCode::PushThis => {
@@ -378,7 +380,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         })
                         .collect();
 
-                    let bfunc = rfunc.bind(bound_values, &state.gc);
+                    let bfunc = rfunc.bind(bound_values, &mut state.gc);
 
                     state.current_frame.op_stack.push(Value::pusl_fn(bfunc));
                 }
@@ -520,8 +522,10 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         state.current_frame = parent_frame;
                         continue;
                     } else if let Some(parent_frame) = state.resolve_stack.pop() {
-                        let (frame, resolution) =
-                            process_bcf(parent_frame, &state.imports, &state.gc);
+                        let (frame, resolution) = {
+                            let ExecutionState { imports, gc, .. } = &mut *state;
+                            process_bcf(parent_frame, imports, gc)
+                        };
                         state.current_frame = frame;
                         state.imports.push(resolution);
                         continue;
