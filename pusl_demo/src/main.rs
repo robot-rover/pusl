@@ -25,7 +25,7 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     let lines = SECOND_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("secondary_source"));
+    let code = linearize_file(ast);
     Some(code)
 }
 
@@ -40,7 +40,7 @@ fn main() {
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("../resources/simple_program.pusl"));
+    let code = linearize_file(ast);
     let ctx = ExecContext {
         resolve: test_resolve,
     };

@@ -1,8 +1,8 @@
 use crate::backend::object::Value;
 use garbage::ManagedPool;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fmt::{Debug, Formatter};
-use std::{cell::RefCell, fmt};
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Literal {
@@ -68,6 +68,8 @@ pub enum BlockType {
     For,
     Cmp,
     Function,
+    Try,
+    Yoink,
 }
 
 pub enum LexUnit {
@@ -147,6 +149,7 @@ pub enum Keyword {
     Import,
     As,
     Yield,
+    Yeet,
 }
 
 #[derive(Debug, PartialEq, Clone)]

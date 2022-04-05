@@ -1,10 +1,10 @@
-use std::{cell::RefCell, collections::HashMap, env};
+use std::{cell::RefCell, collections::HashMap, env, mem};
 
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
 
-use crate::backend::linearize::ByteCodeFile;
-use crate::backend::object::{FnPtr, Object, ObjectPtr, PuslObject, Value};
+use crate::backend::linearize::{ByteCodeFile, ErrorCatch};
+use crate::backend::object::{is_instance_of, FnPtr, Object, ObjectPtr, PuslObject, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -23,6 +23,7 @@ pub mod list;
 use fmt::Formatter;
 use std::ops::Deref;
 
+use crate::backend::ExecuteReturn::{Return, Yield};
 use linearize::{OpCode, ResolvedFunction};
 
 use self::object::{FunctionTarget, NativeFn};
@@ -145,25 +146,22 @@ impl Default for ExecContext {
 
 fn process_bcf(
     bcf: ByteCodeFile,
+    path: PathBuf,
     resolved_imports: &Vec<(PathBuf, ObjectPtr)>,
     gc: &mut ManagedPool,
 ) -> (StackFrame, (PathBuf, ObjectPtr)) {
-    let ByteCodeFile {
-        file,
-        base_func,
-        imports,
-    } = bcf;
+    let ByteCodeFile { base_func, imports } = bcf;
     let rfunc = base_func.resolve(resolved_imports, imports, gc);
     let bfunc = rfunc.bind(Vec::new(), gc);
     let (current_frame, import_object) = StackFrame::from_file(bfunc, gc);
-    (current_frame, (file, import_object))
+    (current_frame, (path, import_object))
 }
 
 pub struct ExecutionState<'a> {
     imports: Vec<(PathBuf, ObjectPtr)>,
     execution_stack: Vec<StackFrame>,
     current_frame: StackFrame,
-    resolve_stack: Vec<ByteCodeFile>,
+    resolve_stack: Vec<(PathBuf, ByteCodeFile)>,
     gc: ManagedPool,
     builtins: HashMap<&'static str, Value>,
     builtin_data: AnyMap,
@@ -193,23 +191,26 @@ impl<'a> Debug for ExecutionState<'a> {
     }
 }
 
-pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
+pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
     let mut registry = Vec::new();
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
     let ExecContext { resolve } = ctx;
     let mut resolved_imports = Vec::<(PathBuf, ObjectPtr)>::new();
-    let mut resolve_stack = vec![main];
+    let mut resolve_stack = vec![(main_path, main)];
     let mut index = 0;
     // TODO: Don't clone here
     while index < resolve_stack.len() {
         let mut append = Vec::new();
-        for import in &resolve_stack[index].imports {
-            if !resolve_stack.iter().any(|bcf| bcf.file == import.path) {
+        for import in &resolve_stack[index].1.imports {
+            if !resolve_stack
+                .iter()
+                .any(|(path, _bcf)| path == &import.path)
+            {
                 let new_bcf = resolve(import.path.clone()).unwrap_or_else(|| {
                     panic!("Unable to resolve import {}", import.path.display())
                 });
-                append.push(new_bcf);
+                append.push((import.path.clone(), new_bcf));
             }
         }
         resolve_stack.append(&mut append);
@@ -219,8 +220,8 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
     //TODO: Can we remove this refcell now?
     let mut gc = ManagedPool::new();
 
-    let top = resolve_stack.pop().unwrap();
-    let (current_frame, resolution) = process_bcf(top, &resolved_imports, &mut gc);
+    let (main_path, top) = resolve_stack.pop().unwrap();
+    let (current_frame, resolution) = process_bcf(top, main_path, &resolved_imports, &mut gc);
     resolved_imports.push(resolution);
 
     let state = ExecutionState {
@@ -236,15 +237,52 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
 
     let rstate = RefCell::new(state);
 
-    execute(&rstate);
+    let result = execute(&rstate);
+    match result {
+        Return(ret_val) => println!("Execution Returned {:?}", ret_val),
+        Yield(yield_val) => println!("Execution Yielded {:?}", yield_val),
+        ExecuteReturn::Error(error) => println!("Uncaught Error {:?}", error),
+    }
 }
 
-fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
+enum ExecuteReturn {
+    Return(Value),
+    Yield(Value),
+    Error(Value),
+}
+
+fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
     let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
     let mut make_generator: Option<StackFrame> = None;
+    let mut current_catch: Option<(ObjectPtr, ErrorCatch)> = None;
     loop {
         {
             let mut state = st.borrow_mut();
+            let current_idx = state.current_frame.index;
+            if let Some((error, catch)) = current_catch.take() {
+                if current_idx == catch.yoink {
+                    let filter = state.current_frame.op_stack.pop().unwrap();
+                    if let Value::Object(object_ptr) = filter {
+                        if is_instance_of(error.clone(), &object_ptr) {
+                            state
+                                .current_frame
+                                .variables
+                                .push(VariableStack::Variable(Variable {
+                                    value: Value::Object(error),
+                                    name: catch.variable_name,
+                                }))
+                        } else {
+                            match unwind_stack(&mut state, current_idx, error) {
+                                Ok(error_catch) => current_catch = Some(error_catch),
+                                Err(ret_val) => return ExecuteReturn::Error(ret_val),
+                            }
+                            continue;
+                        }
+                    }
+                } else {
+                    current_catch = Some((error, catch));
+                }
+            }
             let current_op = if let Some(op) = state.current_frame.get_code() {
                 op
             } else {
@@ -252,16 +290,16 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     parent_frame.op_stack.push(Value::Null);
                     state.current_frame = parent_frame;
                     continue;
-                } else if let Some(parent_frame) = state.resolve_stack.pop() {
+                } else if let Some((path, parent_frame)) = state.resolve_stack.pop() {
                     let (frame, resolution) = {
                         let ExecutionState { imports, gc, .. } = &mut *state;
-                        process_bcf(parent_frame, imports, gc)
+                        process_bcf(parent_frame, path, imports, gc)
                     };
                     state.current_frame = frame;
                     state.imports.push(resolution);
                     continue;
                 } else {
-                    return (Value::Null, false);
+                    return Return(Value::Null);
                 }
             };
 
@@ -521,16 +559,16 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         parent_frame.op_stack.push(return_value);
                         state.current_frame = parent_frame;
                         continue;
-                    } else if let Some(parent_frame) = state.resolve_stack.pop() {
+                    } else if let Some((path, parent_frame)) = state.resolve_stack.pop() {
                         let (frame, resolution) = {
                             let ExecutionState { imports, gc, .. } = &mut *state;
-                            process_bcf(parent_frame, imports, gc)
+                            process_bcf(parent_frame, path, imports, gc)
                         };
                         state.current_frame = frame;
                         state.imports.push(resolution);
                         continue;
                     } else {
-                        return (return_value, false);
+                        return Return(return_value);
                     }
                 }
                 OpCode::ConditionalJump => {
@@ -678,7 +716,19 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                 OpCode::Yield => {
                     assert!(state.current_frame.bfunc.target.function.is_generator);
                     let result = state.current_frame.op_stack.pop().unwrap();
-                    return (result, true);
+                    return Yield(result);
+                }
+                OpCode::Yeet => {
+                    let error = state.current_frame.op_stack.pop().unwrap();
+                    let error_obj = if let Value::Object(object_ptr) = error {
+                        object_ptr
+                    } else {
+                        panic!("Can only yeet an object, not {:?}", error);
+                    };
+                    match unwind_stack(&mut state, current_idx, error_obj) {
+                        Ok(error_catch) => current_catch = Some(error_catch),
+                        Err(ret_val) => return ExecuteReturn::Error(ret_val),
+                    }
                 }
             }
         }
@@ -689,6 +739,27 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
         if let Some(stack_frame) = make_generator.take() {
             let result = generator::new_generator(stack_frame, st);
             st.borrow_mut().current_frame.op_stack.push(result);
+        }
+    }
+}
+
+fn unwind_stack(
+    state: &mut ExecutionState,
+    mut current_idx: usize,
+    error: ObjectPtr,
+) -> Result<(ObjectPtr, ErrorCatch), Value> {
+    loop {
+        for catch in &state.current_frame.bfunc.target.function.catches {
+            if catch.begin <= current_idx && catch.filter > current_idx {
+                state.current_frame.index = catch.filter;
+                return Ok((error, catch.clone()));
+            }
+        }
+        if let Some(mut new_frame) = state.execution_stack.pop() {
+            mem::swap(&mut new_frame, &mut state.current_frame);
+            current_idx = state.current_frame.index;
+        } else {
+            return Err(Value::Object(error));
         }
     }
 }

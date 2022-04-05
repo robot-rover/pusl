@@ -4,6 +4,7 @@ use bitflags::_core::fmt::Formatter;
 use fmt::Display;
 use std::any::Any;
 
+
 use garbage::{Gc, MarkTrace};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -25,7 +26,7 @@ pub enum FunctionTarget {
     Pusl(FnPtr),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Value {
     Null,
     Boolean(bool),
@@ -34,6 +35,45 @@ pub enum Value {
     String(StringPtr),
     Function(MethodPtr),
     Object(ObjectPtr),
+}
+
+struct ObjectFmtWrapper<'a>(&'a ObjectPtr);
+
+impl<'a> Debug for ObjectFmtWrapper<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.try_borrow() {
+            Ok(borrow) => Debug::fmt(&*borrow, f),
+            Err(_) => Debug::fmt(self, f),
+        }
+    }
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Null => f.debug_tuple("Null").finish(),
+            Value::Boolean(val) => f.debug_tuple("Boolean").field(val).finish(),
+            Value::Integer(val) => f.debug_tuple("Integer").field(val).finish(),
+            Value::Float(val) => f.debug_tuple("Float").field(val).finish(),
+            Value::String(val) => f.debug_tuple("String").field(&**val).finish(),
+            Value::Function((function, this)) => {
+                let mut debug = f.debug_struct("Function");
+                match function {
+                    FunctionTarget::Native(native) => debug.field("native", native),
+                    FunctionTarget::Pusl(pusl) => debug
+                        .field("pusl", &**pusl)
+                };
+                if let Some(this) = this {
+                    debug.field("this", &ObjectFmtWrapper(this));
+                }
+                debug.finish()
+            }
+            Value::Object(obj) => f
+                .debug_tuple("Object")
+                .field(&ObjectFmtWrapper(obj))
+                .finish(),
+        }
+    }
 }
 
 macro_rules! value_try_from {
@@ -155,14 +195,33 @@ impl MarkTrace for PuslObject {
     }
 }
 
+pub fn is_instance_of(obj: ObjectPtr, parent: &ObjectPtr) -> bool {
+    let mut current = obj;
+    loop {
+        if &current == parent {
+            return true;
+        }
+        let pusl_obj = current
+            .borrow()
+            .get_native_data()
+            .downcast_ref::<PuslObject>()
+            .and_then(|pusl_obj| pusl_obj.super_ptr.clone());
+        if let Some(super_ptr) = pusl_obj {
+            current = super_ptr
+        } else {
+            return false;
+        }
+    }
+}
+
 //Todo: The debug impl really should be custom
 pub struct PuslObject {
     super_ptr: Option<ObjectPtr>,
     fields: HashMap<String, Value>,
 }
 
-impl std::fmt::Debug for PuslObject {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for PuslObject {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Object")
             .field("super_ptr", &self.super_ptr)
             .field("fields", &self.fields)
@@ -208,26 +267,41 @@ impl PuslObject {
 
 impl Object for PuslObject {
     fn assign_field(&mut self, name: &str, value: Value, is_let: bool) {
-        if is_let {
-            self.fields.insert(name.to_string(), value);
+        if name == "super" {
+            match value {
+                Value::Object(object_ptr) => self.super_ptr = Some(object_ptr),
+                Value::Null => panic!("Cannot Remove Super Object"),
+                _ => panic!("Super Object must be an Object"),
+            }
         } else {
-            let entry = self.fields.get_mut(name);
-            if let Some(old_value) = entry {
-                *old_value = value;
+            if is_let {
+                self.fields.insert(name.to_string(), value);
             } else {
-                panic!("Cannot assign to non-existent field without let")
+                let entry = self.fields.get_mut(name);
+                if let Some(old_value) = entry {
+                    *old_value = value;
+                } else {
+                    panic!("Cannot assign to non-existent field without let")
+                }
             }
         }
     }
 
     fn get_field(&self, name: &str) -> Value {
-        //TODO: Bad Recursion
-        if let Some(value) = self.fields.get(name).map(|val| (*val).clone()) {
-            value
-        } else if let Some(super_ptr) = &self.super_ptr {
-            super_ptr.borrow().get_field(name)
+        if name == "super" {
+            match &self.super_ptr {
+                Some(super_obj) => Value::Object(super_obj.clone()),
+                None => Value::Null,
+            }
         } else {
-            Value::Null
+            //TODO: Bad Recursion
+            if let Some(value) = self.fields.get(name).map(|val| (*val).clone()) {
+                value
+            } else if let Some(super_ptr) = &self.super_ptr {
+                super_ptr.borrow().get_field(name)
+            } else {
+                Value::Null
+            }
         }
     }
 

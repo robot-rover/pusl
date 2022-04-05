@@ -10,3 +10,12 @@ fn small_test() {
         print!("{:?}", root);
     }
 }
+
+#[test]
+fn error_test() {
+    let lines = include_str!("../resources/errors.pusl").lines();
+    let roots = lex(lines);
+    for root in roots {
+        print!("{:?}", root);
+    }
+}

@@ -1,0 +1,41 @@
+let error_type = Object()
+let error_type.message = "Stupid"
+let error_type.testfn = fn[error_type]():
+    print("Inside testfn\n")
+    yeet Object(error_type)
+    print("Oops, didn't yeet\n")
+
+print("a", "\n")
+try:
+    print("b", "\n")
+    let error_inst = Object(error_type)
+    let error_inst.message = "Wow!"
+    yeet error_inst
+yoink error_type thrown:
+    print("Yoinking\n")
+    print(thrown.message, "\n")
+    print(thrown.super.message, "\n")
+print("Done!\n")
+
+try:
+    print("Throwing inside function\n")
+    error_type.testfn()
+yoink error_type test2:
+    print("Caught\n")
+    print(test2, "\n")
+print("Done2!\n")
+
+let root = Object()
+let root.a = fn[root](num):
+    if num > 10:
+        yeet root
+    else if num%2 == 0:
+        root.b(num+1)
+    else:
+        root.c(num+1)
+let root.b = fn[root](num):
+    root.a(num)
+let root.c = fn[root](num):
+    root.a(num)
+
+root.a(0)

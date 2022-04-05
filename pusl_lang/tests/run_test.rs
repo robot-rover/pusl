@@ -14,7 +14,7 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     let lines = SECOND_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("secondary_source"));
+    let code = linearize_file(ast);
     Some(code)
 }
 
@@ -25,9 +25,10 @@ fn generator_test() {
     let lines = GENERATOR_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("generator.pusl"));
+    let code = linearize_file(ast);
+    let path = PathBuf::from("generator.pusl");
     let ctx = ExecContext { resolve: |_| None };
-    startup(code, ctx);
+    startup(code, path, ctx);
 }
 
 #[test]
@@ -35,11 +36,25 @@ fn small_test() {
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("../resources/simple_program.pusl"));
+    let code = linearize_file(ast);
+    let path = PathBuf::from("../resources/simple_program.pusl");
     let ctx = ExecContext {
         resolve: test_resolve,
     };
-    startup(code, ctx);
+    startup(code, path, ctx);
+}
+
+#[test]
+fn error_test() {
+    let lines = include_str!("../resources/errors.pusl").lines();
+    let roots = lex(lines);
+    let ast = parse(roots);
+    let code = linearize_file(ast);
+    let path = PathBuf::from("../resources/errors.pusl");
+    let ctx = ExecContext {
+        resolve: test_resolve,
+    };
+    startup(code, path, ctx);
 }
 
 const FIBB_SOURCE: &'static str = include_str!("../resources/fibb.pusl");
@@ -49,7 +64,8 @@ fn fibb_test() {
     let lines = FIBB_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("../resources/fibb.pusl"));
+    let code = linearize_file(ast);
+    let path = PathBuf::from("../resources/fibb.pusl");
     let ctx = ExecContext { resolve: |_| None };
-    startup(code, ctx);
+    startup(code, path, ctx);
 }

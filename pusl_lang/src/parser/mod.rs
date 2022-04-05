@@ -8,6 +8,7 @@ use crate::parser::expression::Compare;
 use crate::parser::expression::Expression;
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
 use crate::parser::InBetween::{Lexeme, Parsed};
+use serde::{Deserialize, Serialize};
 use std::iter::Peekable;
 use std::path::PathBuf;
 
@@ -28,7 +29,7 @@ pub struct ParsedFile {
     pub imports: Vec<Import>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Import {
     pub path: PathBuf,
     pub alias: String,
@@ -123,6 +124,56 @@ fn parse_while(block: Block) -> Branch {
     };
     let (condition, body) = parse_condition_body(block, &mut condition_func);
     Branch::WhileLoop { condition, body }
+}
+
+fn parse_try<I>(try_block: Block, block_stream: &mut Peekable<I>) -> Branch
+where
+    I: Iterator<Item = LexUnit>,
+{
+    let mut try_func = |it: &mut dyn Iterator<Item = Token>| {
+        assert_eq!(
+            Some(Token::Block(BlockType::Try)),
+            it.next(),
+            "If the function is called, should be parsing an try block"
+        );
+        assert_eq!(None, it.next(), "Try block should have empty condition");
+    };
+    let (_, try_body) = parse_condition_body(try_block, &mut try_func);
+
+    let mut yoink_func = |it: &mut dyn Iterator<Item = Token>| {
+        assert_eq!(
+            Some(Token::Block(BlockType::Yoink)),
+            it.next(),
+            "If the function is called, should be parsing an yoink block"
+        );
+        let mut expr_tokens = it.collect::<Vec<_>>();
+        let variable = if let Some(Token::Reference(name)) = expr_tokens.pop() {
+            name
+        } else {
+            panic!("No variable name in yoink condition");
+        };
+        let expr = parse_expression(&mut expr_tokens.into_iter());
+        (expr, variable)
+    };
+
+    let ((filter_expr, error_variable), yoink_body) =
+        if let Some(LexUnit::Block(block)) = block_stream.next() {
+            assert_eq!(
+                block.kind,
+                BlockType::Yoink,
+                "yoink Block should follow try block"
+            );
+            parse_condition_body(block, &mut yoink_func)
+        } else {
+            panic!("yoink Block should follow try block");
+        };
+
+    Branch::TryBlock {
+        try_body,
+        filter_expr,
+        error_variable,
+        yoink_body,
+    }
 }
 
 /// Parse a group of if, else if, ..., else blocks
@@ -295,7 +346,9 @@ where
         BlockType::For => Eval::Branch(parse_for(block)),
         BlockType::Cmp => Eval::Branch(parse_compare(block)),
         BlockType::Function => Eval::Expression(parse_function_declaration(block)),
+        BlockType::Try => Eval::Branch(parse_try(block, block_stream)),
         BlockType::Else | BlockType::ElseIf => panic!("Parsed else without if"),
+        BlockType::Yoink => panic!("Parsed yoink without try"),
     };
 
     Box::new(block)
@@ -926,6 +979,11 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
                 Box::new(|target| Expression::Yield { value: target }),
                 false,
             ),
+            (
+                Token::Keyword(Keyword::Yeet),
+                Box::new(|target| Expression::Yeet { value: target }),
+                false,
+            ),
         ],
     );
     let expr = match between.pop() {
@@ -933,6 +991,6 @@ fn parse_expression(tokens: &mut dyn Iterator<Item = Token>) -> ExpRef {
         Some(Lexeme(token)) => panic!("{:?}", token),
         None => panic!(),
     };
-    assert!(between.is_empty());
+    assert!(between.is_empty(), "{:?}", &between);
     expr
 }

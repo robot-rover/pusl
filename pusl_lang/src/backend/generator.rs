@@ -1,10 +1,11 @@
-use crate::backend::execute;
 use crate::backend::object::Value::Boolean;
 use crate::backend::object::{NativeFn, NativeFnHandle, Object, Value};
+use crate::backend::{execute, ExecuteReturn};
 use garbage::MarkTrace;
 use std::any::Any;
 use std::{cell::RefCell, collections::HashMap};
 
+use crate::backend::ExecuteReturn::Yield;
 use anymap::AnyMap;
 use std::fmt::{Debug, Formatter};
 
@@ -143,15 +144,15 @@ fn has_next<'a: 'b, 'b>(
             let has_next = if let Some(next_val) = &generator.next_val {
                 !check_is_end(next_val)
             } else {
-                let (value, did_yield) = run_frame(
+                let ex_return = run_frame(
                     generator
                         .stack
                         .as_mut()
                         .expect("No stack in generator object"),
                     st,
                 );
-                if did_yield {
-                    generator.next_val = Some(value);
+                if let Yield(val) = ex_return {
+                    generator.next_val = Some(val);
                     true
                 } else {
                     generator.next_val = Some(assemble_end(st));
@@ -170,7 +171,7 @@ fn has_next<'a: 'b, 'b>(
 fn run_frame<'a: 'b, 'b>(
     frame: &mut StackFrame,
     st: &'a RefCell<ExecutionState<'b>>,
-) -> (Value, bool) {
+) -> ExecuteReturn {
     let mut old_stack = Vec::new();
     {
         let mut stb = st.borrow_mut();
@@ -204,15 +205,15 @@ pub fn next<'a>(
                 }
                 next_val
             } else {
-                let (value, did_yield) = run_frame(
+                let ex_return = run_frame(
                     generator
                         .stack
                         .as_mut()
                         .expect("No stack in generator object"),
                     st,
                 );
-                if did_yield {
-                    value
+                if let Yield(val) = ex_return {
+                    val
                 } else {
                     generator.next_val = Some(assemble_end(st));
                     assemble_end(st)

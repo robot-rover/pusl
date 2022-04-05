@@ -9,6 +9,13 @@ pub struct ConditionBody {
 /// Syntax Blocks which branch execution flow
 #[derive(Debug)]
 pub enum Branch {
+    TryBlock {
+        try_body: ExpRef,
+        filter_expr: ExpRef,
+        error_variable: String,
+        yoink_body: ExpRef,
+    },
+
     IfElseBlock {
         conditions: Vec<ConditionBody>,
         last: Option<ExpRef>,

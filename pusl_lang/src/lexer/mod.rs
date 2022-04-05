@@ -9,6 +9,7 @@ use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Literal, Symbol, T
 use std::cmp;
 use std::iter::Peekable;
 use std::str::Chars;
+use crate::backend::linearize::OpCode::Modulus;
 
 pub mod peek_while;
 pub mod token;
@@ -107,12 +108,14 @@ where
                     line: tokens,
                     children,
                 }))
-            } else {
+            } else if tokens.contains(&Token::Keyword(Keyword::Fn)) {
                 Some(LexUnit::Block(Block {
                     kind: BlockType::Function,
                     line: tokens,
                     children,
                 }))
+            } else {
+                panic!("Unrecognized Block Type");
             }
         } else {
             Some(LexUnit::Statement(tokens))
@@ -204,6 +207,7 @@ fn read_symbol(line: &mut Source) -> Symbol {
         ']' => CloseSquareBracket,
         '&' => And,
         '|' => Or,
+        '%' => Percent,
         _ => panic!("Unrecognized Symbol"),
     }
 }
@@ -257,6 +261,9 @@ fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
                 "import" => Some(Token::Keyword(Keyword::Import)),
                 "as" => Some(Token::Keyword(Keyword::As)),
                 "yield" => Some(Token::Keyword(Keyword::Yield)),
+                "yeet" => Some(Token::Keyword(Keyword::Yeet)),
+                "try" => Some(Token::Block(BlockType::Try)),
+                "yoink" => Some(Token::Block(BlockType::Yoink)),
                 _ => None,
             }
             .unwrap_or(Token::Reference(ident));
