@@ -2,7 +2,7 @@ use crate::backend::object::Value;
 use garbage::ManagedPool;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Debug, Formatter};
-use std::{cell::RefCell, fmt};
+use std::fmt;
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Literal {
@@ -28,7 +28,7 @@ impl Literal {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Serialize, Deserialize)]
 pub enum Symbol {
     OpenParenthesis,
     CloseParenthesis,
@@ -59,7 +59,7 @@ pub enum Symbol {
     And,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum BlockType {
     If,
     Else,
@@ -70,6 +70,7 @@ pub enum BlockType {
     Function,
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub enum LexUnit {
     Statement(Vec<Token>),
     Block(Block),
@@ -81,6 +82,7 @@ impl Debug for LexUnit {
     }
 }
 
+#[derive(Serialize, Deserialize, PartialEq)]
 pub struct Block {
     pub kind: BlockType,
     pub line: Vec<Token>,
@@ -135,7 +137,7 @@ impl Debug for Block {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Keyword {
     Let,
     In,
@@ -149,7 +151,7 @@ pub enum Keyword {
     Yield,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Token {
     Literal(Literal),
     Block(BlockType),

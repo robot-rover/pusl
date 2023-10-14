@@ -6,8 +6,8 @@ use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;
 
-const SMALL_SOURCE: &'static str = include_str!("../resources/simple_program.pusl");
-const SECOND_SOURCE: &'static str = include_str!("../resources/secondary_source.pusl");
+const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
+const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 
 fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     assert_eq!(path.to_str().unwrap(), "secondary_source");
@@ -18,7 +18,7 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
     Some(code)
 }
 
-const GENERATOR_SOURCE: &'static str = include_str!("../resources/generator.pusl");
+const GENERATOR_SOURCE: &'static str = include_str!("../../resources/generator.pusl");
 
 #[test]
 fn generator_test() {
@@ -35,21 +35,21 @@ fn small_test() {
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("../resources/simple_program.pusl"));
+    let code = linearize_file(ast, PathBuf::from("../../resources/simple_program.pusl"));
     let ctx = ExecContext {
         resolve: test_resolve,
     };
     startup(code, ctx);
 }
 
-const FIBB_SOURCE: &'static str = include_str!("../resources/fibb.pusl");
+const FIBB_SOURCE: &'static str = include_str!("../../resources/fibb.pusl");
 
 #[test]
 fn fibb_test() {
     let lines = FIBB_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("../resources/fibb.pusl"));
+    let code = linearize_file(ast, PathBuf::from("../../resources/fibb.pusl"));
     let ctx = ExecContext { resolve: |_| None };
     startup(code, ctx);
 }

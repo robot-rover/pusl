@@ -8,3 +8,4 @@ extern crate serde;
 pub mod backend;
 pub mod lexer;
 pub mod parser;
+pub mod test_util;

@@ -2,6 +2,8 @@
 //! This is where grammatical errors are caught (lexer catches syntax errors).
 //! This data is taken in by the linearization engine before being executed.
 
+use serde::{Deserialize, Serialize};
+
 use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Symbol, Token};
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::Compare;
@@ -17,18 +19,19 @@ pub mod expression;
 /// All structures in the Abstract Syntax Tree
 /// Branch and Expression or different because Branch will affect execution flow
 /// Expression executes in a deterministic order
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize, PartialEq)]
 pub enum Eval {
     Expression(Expression),
     Branch(Branch),
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 pub struct ParsedFile {
     pub expr: ExpRef,
     pub imports: Vec<Import>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Import {
     pub path: PathBuf,
     pub alias: String,

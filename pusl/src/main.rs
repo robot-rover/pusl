@@ -6,7 +6,7 @@ extern crate shrust;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use clap::{App, Arg, SubCommand};
-use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile, Function};
+use pusl_lang::backend::{linearize::{linearize_file, ByteCodeFile}, ExecContext, startup};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::fs::File;
@@ -35,12 +35,12 @@ fn compile_from_source_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCo
     Ok(base_func)
 }
 
-fn write_to_code_path(path: &PathBuf, base_func: Function, verbosity: u64) -> io::Result<()> {
+fn write_to_code_path(path: &PathBuf, base_func: &ByteCodeFile, verbosity: u64) -> io::Result<()> {
     if verbosity >= 1 {
         println!("Using output file: {}", path.display());
     }
     if verbosity >= 2 {
-        println!("{:?}", &base_func);
+        println!("{:?}", base_func);
     }
     let output_file = File::create(path)?;
     let mut writer = BufWriter::new(output_file);
@@ -48,11 +48,11 @@ fn write_to_code_path(path: &PathBuf, base_func: Function, verbosity: u64) -> io
     writer.write_all(MAGIC_NUMBER)?;
     writer.write_u16::<LittleEndian>(MAJOR_VERSION)?; // Bytecode Major Version
     writer.write_u16::<LittleEndian>(MINOR_VERSION)?; // Bytecode Minor Version
-    bincode::serialize_into(writer, &base_func).expect("Unable to write bytecode");
+    bincode::serialize_into(writer, base_func).expect("Unable to write bytecode");
     Ok(())
 }
 
-fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<Function> {
+fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCodeFile> {
     if verbosity >= 1 {
         println!("Using input file: {}", path.display());
     }
@@ -71,7 +71,7 @@ fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<Function> {
         bytcode_minor <= MINOR_VERSION,
         "Bytecode version is incompatible"
     );
-    let function: Function = bincode::deserialize_from(reader).expect("Bytecode is corrupt");
+    let function: ByteCodeFile = bincode::deserialize_from(reader).expect("Bytecode is corrupt");
     if verbosity >= 2 {
         println!("{:?}", &function);
     }
@@ -133,47 +133,38 @@ fn main() -> io::Result<()> {
         )
         .get_matches();
 
-    let _verbosity = matches.occurrences_of("v");
+    let verbosity = matches.occurrences_of("v");
 
     match matches.subcommand() {
-        // ("compile", Some(matches)) => {
-        //     let mut path = PathBuf::from(matches.value_of("SOURCE").unwrap());
-        //
-        //     let base_func = compile_from_source_path(&path, verbosity)?;
-        //     if matches.is_present("analyze") {
-        //         let mut stack = vec![&base_func];
-        //         while let Some(file) = stack.pop() {
-        //             file.base_func.sub_functions.iter().for_each(|func| stack.push(func));
-        //             println!("{:#?}", func);
-        //         }
-        //     } else {
-        //         path.set_extension("puslc");
-        //         write_to_code_path(&path, base_func, verbosity)?;
-        //     }
-        // }
-        // ("run", Some(matches)) => {
-        //     let path = PathBuf::from(matches.value_of("CODE").unwrap());
-        //
-        //     let function = load_code_from_path(&path, verbosity)?;
-        //     if matches.is_present("analyze") {
-        //         let mut stack = vec![&function];
-        //         while let Some(func) = stack.pop() {
-        //             func.sub_functions.iter().for_each(|func| stack.push(func));
-        //             println!("{:#?}", func);
-        //         }
-        //     } else {
-        //         let function = Box::leak(Box::new(function));
-        //
-        //         execute(function);
-        //     }
-        // }
-        // ("interpret", Some(matches)) => {
-        //     let path = PathBuf::from(matches.value_of("SOURCE").unwrap());
-        //
-        //     let function = compile_from_source_path(&path, verbosity)?;
-        //     let function = Box::leak(Box::new(function));
-        //     execute(function);
-        // }
+        ("compile", Some(matches)) => {
+            let mut path = PathBuf::from(matches.value_of("SOURCE").unwrap());
+
+            let bcf = compile_from_source_path(&path, verbosity)?;
+            if matches.is_present("analyze") {
+                println!("{:#?}", bcf.base_func);
+            } else {
+                path.set_extension("puslc");
+                write_to_code_path(&path, &bcf, verbosity)?;
+            }
+        }
+        ("run", Some(matches)) => {
+            let path = PathBuf::from(matches.value_of("CODE").unwrap());
+
+            let bcf = load_code_from_path(&path, verbosity)?;
+            if matches.is_present("analyze") {
+                println!("{:#?}", bcf.base_func);
+            } else {
+                let ctx = ExecContext { resolve: |_| None };
+                startup(bcf, ctx);
+            }
+        }
+        ("interpret", Some(matches)) => {
+            let path = PathBuf::from(matches.value_of("SOURCE").unwrap());
+
+            let bcf = compile_from_source_path(&path, verbosity)?;
+            let ctx = ExecContext { resolve: |_| None };
+            startup(bcf, ctx);
+        }
         _ => println!("{}", matches.usage()),
     }
 

@@ -91,9 +91,8 @@ pub fn register(
     });
 }
 
-pub fn new_generator(stack_frame: StackFrame, st: &RefCell<ExecutionState>) -> Value {
+pub fn new_generator(stack_frame: StackFrame, st: &mut ExecutionState) -> Value {
     let generator_builtins = *st
-        .borrow()
         .builtin_data
         .get::<GeneratorBuiltin>()
         .expect("Generator Builtins are not loaded");
@@ -102,7 +101,7 @@ pub fn new_generator(stack_frame: StackFrame, st: &RefCell<ExecutionState>) -> V
         next_val: None,
         fn_table: generator_builtins,
     });
-    let gc_ptr = st.borrow_mut().gc.place_in_heap(object) as ObjectPtr;
+    let gc_ptr = st.gc.place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }

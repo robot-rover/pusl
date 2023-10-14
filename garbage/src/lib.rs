@@ -168,7 +168,7 @@ impl ManagedPool {
             });
 
             to_drop.into_iter().for_each(|nn_ptr| {
-                Box::from_raw(nn_ptr.as_ptr());
+                drop(Box::from_raw(nn_ptr.as_ptr()));
             })
         }
     }
@@ -184,7 +184,7 @@ impl Default for ManagedPool {
 impl Drop for ManagedPool {
     fn drop(&mut self) {
         self.pool.drain(..).for_each(|obj| unsafe {
-            Box::from_raw(obj.as_ptr());
+            drop(Box::from_raw(obj.as_ptr()));
         })
     }
 }

@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::lexer::token::Literal;
 use crate::parser::ExpRef;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum AssignAccess {
     Field { target: ExpRef, name: String },
 
@@ -12,7 +14,7 @@ pub enum AssignAccess {
 
 /// Syntax Blocks which are linear
 /// i.e. they will never branch
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum Expression {
     Modulus {
         lhs: ExpRef,
@@ -132,13 +134,15 @@ pub enum Expression {
 }
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     pub struct AssignmentFlags: u8 {
         const LET = 0b00000001;
         const CONDITIONAL = 0b00000010;
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[repr(u64)]
 pub enum Compare {
     Less,
     LessEqual,

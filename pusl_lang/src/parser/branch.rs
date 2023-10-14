@@ -1,13 +1,15 @@
+use serde::{Deserialize, Serialize};
+
 use crate::parser::ExpRef;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct ConditionBody {
     pub condition: ExpRef,
     pub body: ExpRef,
 }
 
 /// Syntax Blocks which branch execution flow
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub enum Branch {
     IfElseBlock {
         conditions: Vec<ConditionBody>,

@@ -185,7 +185,7 @@ impl<'a> Debug for ExecutionState<'a> {
                 &linearize::ByteCode::op(current_op),
             ),
             f,
-            &mut (&self.current_frame.bfunc.target.function.code[self.current_frame.index..])
+            &mut (&self.current_frame.bfunc.target.function.code.0[self.current_frame.index..])
                 .iter()
                 .enumerate(),
             &self.current_frame.bfunc.target.function,
@@ -240,9 +240,8 @@ pub fn startup(main: ByteCodeFile, ctx: ExecContext) {
 }
 
 fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
-    let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
-    let mut make_generator: Option<StackFrame> = None;
     loop {
+        let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
         {
             let mut state = st.borrow_mut();
             let current_op = if let Some(op) = state.current_frame.get_code() {
@@ -365,7 +364,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                             state
                                 .current_frame
                                 .variables
-                                .iter_mut()
+                                .iter()
                                 .rev()
                                 .filter_map(|var_stack| {
                                     if let VariableStack::Variable(var) = var_stack {
@@ -409,7 +408,8 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                                     .push(VariableStack::Variable(Variable { value, name }));
                             }
                             if new_frame.bfunc.target.function.is_generator {
-                                make_generator = Some(new_frame);
+                                let result = generator::new_generator(new_frame, &mut state);
+                                state.current_frame.op_stack.push(result);
                             } else {
                                 let old_frame =
                                     std::mem::replace(&mut state.current_frame, new_frame);
@@ -684,10 +684,6 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
         }
         if let Some((ptr, args, this)) = native_fn_call.take() {
             let result = ptr(args, this, st);
-            st.borrow_mut().current_frame.op_stack.push(result);
-        }
-        if let Some(stack_frame) = make_generator.take() {
-            let result = generator::new_generator(stack_frame, st);
             st.borrow_mut().current_frame.op_stack.push(result);
         }
     }

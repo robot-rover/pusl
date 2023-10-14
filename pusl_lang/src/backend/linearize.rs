@@ -8,14 +8,15 @@ use crate::parser::expression::{Compare, Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
 use garbage::ManagedPool;
 use pad_adapter::PadAdapter;
-use serde::de::Visitor;
+use serde::{de::{Visitor, Error}, ser::{SerializeSeq, self}};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
 use std::path::PathBuf;
-use std::{cell::RefCell, env, fmt};
+use std::{env, fmt};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[repr(u64)]
 // Top is Rhs (Bottom is lhs and calculated first)
 pub enum OpCode {
     Modulus,       // 2 Stack Values
@@ -53,6 +54,50 @@ pub enum OpCode {
     Yield, // Yield top of Stack
 }
 
+fn bytecode_decode(op_code: OpCode) -> &'static [ByteCodeTag] {
+    use ByteCodeTag::*;
+    match op_code {
+        OpCode::Modulus => &[],
+        OpCode::Literal => &[Value],
+        OpCode::PushReference => &[Value],
+        OpCode::PushFunction => &[Value],
+        OpCode::PushThis => &[],
+        OpCode::FunctionCall => &[Value],
+        OpCode::FieldAccess => &[Value],
+        OpCode::Addition => &[],
+        OpCode::Subtraction => &[],
+        OpCode::Negate => &[],
+        OpCode::Multiply => &[],
+        OpCode::Divide => &[],
+        OpCode::AssignReference => &[Value, LetAssign],
+        OpCode::AssignField => &[Value, LetAssign],
+        OpCode::DivideTruncate => &[],
+        OpCode::Exponent => &[],
+        OpCode::Compare => &[Compare],
+        OpCode::And => &[],
+        OpCode::Or => &[],
+        OpCode::ScopeUp => &[],
+        OpCode::ScopeDown => &[],
+        OpCode::Return => &[],
+        OpCode::ConditionalJump => &[Value],
+        OpCode::ComparisonJump => &[Value],
+        OpCode::Jump => &[Value],
+        OpCode::Pop => &[],
+        OpCode::IsNull => &[],
+        OpCode::Duplicate => &[],
+        OpCode::DuplicateMany => &[Value],
+        OpCode::PushBuiltin => &[Value],
+        OpCode::DuplicateDeep => &[Value],
+        OpCode::PushSelf => &[],
+        OpCode::Yield => &[],
+    }
+}
+
+pub enum ByteCodeTag {
+    Value, Compare, LetAssign
+}
+
+// TODO: I'm pretty sure this is bad
 #[derive(Copy, Clone)]
 #[repr(C)]
 pub union ByteCode {
@@ -62,28 +107,51 @@ pub union ByteCode {
     let_assign: bool,
 }
 
-impl Serialize for ByteCode {
+#[derive(Clone)]
+pub struct ByteCodeArray(pub Vec<ByteCode>);
+
+impl Serialize for ByteCodeArray {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_u64(unsafe { self.value })
+        let mut iter = self.0.iter();
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        while let Some(op_code) = iter.next() {
+            let op_code = op_code.as_op();
+            seq.serialize_element(&op_code)?;
+            let following = bytecode_decode(op_code);
+            let codes = iter.by_ref().take(following.len()).collect::<Vec<_>>();
+            if following.len() != codes.len() {
+                return Err(ser::Error::custom("Bytecode is an invalid length"));
+            }
+            for (tag, code) in following.into_iter().zip(codes) {
+                unsafe {
+                    match tag {
+                        ByteCodeTag::Value => seq.serialize_element(&code.value)?,
+                        ByteCodeTag::Compare => seq.serialize_element(&code.compare)?,
+                        ByteCodeTag::LetAssign => seq.serialize_element(&code.let_assign)?,
+                    }
+                }
+            }
+        }
+
+        seq.end()
     }
 }
 
-impl<'de> Deserialize<'de> for ByteCode {
+impl<'de> Deserialize<'de> for ByteCodeArray {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_u64(ByteCodeVisitor)
+        D: Deserializer<'de> {
+        deserializer.deserialize_seq(ByteCodeArrayVisitor)
     }
 }
 
-struct ByteCodeVisitor;
+struct ByteCodeArrayVisitor;
 
-impl<'de> Visitor<'de> for ByteCodeVisitor {
-    type Value = ByteCode;
+impl<'de> Visitor<'de> for ByteCodeArrayVisitor {
+    type Value = ByteCodeArray;
 
     fn expecting(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -92,11 +160,24 @@ impl<'de> Visitor<'de> for ByteCodeVisitor {
         )
     }
 
-    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
     where
-        E: serde::de::Error,
+        A: serde::de::SeqAccess<'de>,
     {
-        Ok(ByteCode { value: v })
+        let mut code = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+        let err_fn = || A::Error::custom("Bytecode is an invalid length");
+        while let Some(op_code) = seq.next_element::<OpCode>()? {
+            code.push(ByteCode::op(op_code));
+            for tag in bytecode_decode(op_code) {
+                match tag {
+                    ByteCodeTag::Value => code.push(ByteCode::val(seq.next_element::<u64>()?.ok_or_else(err_fn)? as usize)),
+                    ByteCodeTag::Compare => code.push(ByteCode { compare: seq.next_element::<Compare>()?.ok_or_else(err_fn)? }),
+                    ByteCodeTag::LetAssign => code.push(ByteCode { let_assign: seq.next_element::<bool>()?.ok_or_else(err_fn)? }),
+                }
+            }
+        }
+
+        Ok(ByteCodeArray(code))
     }
 }
 
@@ -130,8 +211,17 @@ impl ByteCode {
     pub fn as_bool(self) -> bool {
         unsafe { self.let_assign }
     }
+
+    pub unsafe fn from_u64(v: u64) -> Self {
+        std::mem::transmute::<u64, Self>(v)
+    }
+
+    pub unsafe fn to_u64(&self) -> u64 {
+        std::mem::transmute_copy::<Self, u64>(self)
+    }
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct ByteCodeFile {
     pub file: PathBuf,
     pub base_func: BasicFunction,
@@ -218,9 +308,9 @@ impl ResolvedFunction {
 pub struct Function {
     pub args: Vec<String>,
     pub binds: Vec<String>,
-    literals: Vec<Literal>,
-    references: Vec<String>,
-    pub code: Vec<ByteCode>,
+    pub literals: Vec<Literal>,
+    pub references: Vec<String>,
+    pub code: ByteCodeArray,
     pub is_generator: bool,
 }
 
@@ -239,6 +329,7 @@ impl Debug for BasicFunction {
             self.function.fmt(f)?;
             write!(f, "\nSub-Functions:")?;
             for (index, sub_fn) in self.sub_functions.iter().enumerate() {
+                // TODO: Should calculate padding needed for the intr. idx
                 writeln!(f, "\n+{:->4}:", index)?;
                 let mut adapter = PadAdapter::with_padding(f, "|   ");
                 write!(adapter, "{:#?}", sub_fn)?;
@@ -333,7 +424,7 @@ impl Debug for Function {
                 " - lits: {}, refs: {}, code: {}",
                 self.literals.len(),
                 self.references.len(),
-                self.code.len(),
+                self.code.0.len(),
             )?;
         } else {
             writeln!(f, "\nLiterals:")?;
@@ -345,7 +436,7 @@ impl Debug for Function {
                 writeln!(f, "    {:3}; {}", index, reference)?;
             }
             writeln!(f, "Code:")?;
-            let mut code_iter = self.code.iter().enumerate().peekable();
+            let mut code_iter = self.code.0.iter().enumerate().peekable();
             while let Some(tuple) = code_iter.next() {
                 write_bytecode_line(tuple, f, &mut code_iter, self)?;
                 if code_iter.peek().is_some() {
@@ -475,19 +566,19 @@ where
 
 impl Function {
     pub fn get_code(&self, index: usize) -> Option<OpCode> {
-        self.code.get(index).map(|b| b.as_op())
+        self.code.0.get(index).map(|b| b.as_op())
     }
 
     pub fn get_val(&self, index: usize) -> usize {
-        self.code[index].as_val()
+        self.code.0[index].as_val()
     }
 
     pub fn get_cmp(&self, index: usize) -> Compare {
-        self.code[index].as_cmp()
+        self.code.0[index].as_cmp()
     }
 
     pub fn get_assign_type(&self, index: usize) -> bool {
-        self.code[index].as_bool()
+        self.code.0[index].as_bool()
     }
 
     //TODO: don't clone this
@@ -529,7 +620,7 @@ impl Function {
     }
 
     fn set_jump(&mut self, index: usize, jump_to: usize) {
-        self.code[index].value = jump_to as u64;
+        self.code.0[index].value = jump_to as u64;
     }
 
     fn place_jump(&mut self, conditional: bool) -> usize {
@@ -538,9 +629,9 @@ impl Function {
         } else {
             OpCode::Jump
         };
-        self.code.push(ByteCode::op(op));
+        self.code.0.push(ByteCode::op(op));
         let index = self.current_index();
-        self.code.push(ByteCode::zero());
+        self.code.0.push(ByteCode::zero());
         index
     }
 
@@ -550,12 +641,12 @@ impl Function {
         } else {
             OpCode::Jump
         };
-        self.code.push(ByteCode::op(op));
-        self.code.push(ByteCode::val(jump_to));
+        self.code.0.push(ByteCode::op(op));
+        self.code.0.push(ByteCode::val(jump_to));
     }
 
     fn current_index(&self) -> usize {
-        self.code.len()
+        self.code.0.len()
     }
 
     fn new(args: Vec<String>, binds: Vec<String>) -> Function {
@@ -564,7 +655,7 @@ impl Function {
             binds,
             literals: vec![],
             references: vec![],
-            code: vec![],
+            code: ByteCodeArray(vec![]),
             is_generator: false,
         }
     }
@@ -607,23 +698,23 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
         Expression::Modulus { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Modulus));
+            func.function.code.0.push(ByteCode::op(OpCode::Modulus));
             true
         }
         Expression::Literal { value } => {
             let literal_index = func.function.add_literal(value);
-            func.function.code.push(ByteCode::op(OpCode::Literal));
-            func.function.code.push(ByteCode::val(literal_index));
+            func.function.code.0.push(ByteCode::op(OpCode::Literal));
+            func.function.code.0.push(ByteCode::val(literal_index));
             true
         }
         Expression::ThisReference => {
-            func.function.code.push(ByteCode::op(OpCode::PushThis));
+            func.function.code.0.push(ByteCode::op(OpCode::PushThis));
             true
         }
         Expression::Reference { target } => {
             let reference_index = func.function.add_reference(target);
-            func.function.code.push(ByteCode::op(OpCode::PushReference));
-            func.function.code.push(ByteCode::val(reference_index));
+            func.function.code.0.push(ByteCode::op(OpCode::PushReference));
+            func.function.code.0.push(ByteCode::val(reference_index));
             true
         }
         Expression::Joiner { expressions } => {
@@ -639,53 +730,53 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             arguments
                 .into_iter()
                 .for_each(|argument| linearize_exp_ref(argument, func, true));
-            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.function.code.push(ByteCode::val(num_args));
+            func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+            func.function.code.0.push(ByteCode::val(num_args));
             true
         }
         Expression::FieldAccess { target, name } => {
             linearize_exp_ref(target, func, true);
             let reference_index = func.function.add_reference(name);
-            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
-            func.function.code.push(ByteCode::val(reference_index));
+            func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
+            func.function.code.0.push(ByteCode::val(reference_index));
             true
         }
         Expression::Addition { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Addition));
+            func.function.code.0.push(ByteCode::op(OpCode::Addition));
             true
         }
         Expression::Subtract { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Subtraction));
+            func.function.code.0.push(ByteCode::op(OpCode::Subtraction));
             true
         }
         Expression::Negate { operand } => {
             linearize_exp_ref(operand, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Negate));
+            func.function.code.0.push(ByteCode::op(OpCode::Negate));
             true
         }
         Expression::Multiply { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Multiply));
+            func.function.code.0.push(ByteCode::op(OpCode::Multiply));
             true
         }
         Expression::Divide { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Multiply));
+            func.function.code.0.push(ByteCode::op(OpCode::Multiply));
             true
         }
         Expression::Elvis { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Duplicate));
-            func.function.code.push(ByteCode::op(OpCode::IsNull));
-            func.function.code.push(ByteCode::op(OpCode::Negate));
+            func.function.code.0.push(ByteCode::op(OpCode::Duplicate));
+            func.function.code.0.push(ByteCode::op(OpCode::IsNull));
+            func.function.code.0.push(ByteCode::op(OpCode::Negate));
             let use_first_index = func.function.place_jump(true);
-            func.function.code.push(ByteCode::op(OpCode::Pop));
+            func.function.code.0.push(ByteCode::op(OpCode::Pop));
             linearize_exp_ref(rhs, func, true);
             let current_index = func.function.current_index();
             func.function.set_jump(use_first_index, current_index);
@@ -701,19 +792,19 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                     linearize_exp_ref(target, func, true);
                     let target_index = func.function.add_reference(name);
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.function.code.push(ByteCode::op(OpCode::Duplicate));
-                        func.function.code.push(ByteCode::op(OpCode::FieldAccess));
-                        func.function.code.push(ByteCode::val(target_index));
-                        func.function.code.push(ByteCode::op(OpCode::IsNull));
-                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        func.function.code.0.push(ByteCode::op(OpCode::Duplicate));
+                        func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
+                        func.function.code.0.push(ByteCode::val(target_index));
+                        func.function.code.0.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.0.push(ByteCode::op(OpCode::Negate));
                         Some(func.function.place_jump(true))
                     } else {
                         None
                     };
                     linearize_exp_ref(expression, func, true);
-                    func.function.code.push(ByteCode::op(OpCode::AssignField));
-                    func.function.code.push(ByteCode::val(target_index));
-                    func.function.code.push(ByteCode {
+                    func.function.code.0.push(ByteCode::op(OpCode::AssignField));
+                    func.function.code.0.push(ByteCode::val(target_index));
+                    func.function.code.0.push(ByteCode {
                         let_assign: flags.intersects(AssignmentFlags::LET),
                     });
                     if let Some(jump_instruction) = skip_index {
@@ -724,20 +815,20 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                 AssignAccess::Reference { name } => {
                     let target_index = func.function.add_reference(name);
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.function.code.push(ByteCode::op(OpCode::PushReference));
-                        func.function.code.push(ByteCode::val(target_index));
-                        func.function.code.push(ByteCode::op(OpCode::IsNull));
-                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        func.function.code.0.push(ByteCode::op(OpCode::PushReference));
+                        func.function.code.0.push(ByteCode::val(target_index));
+                        func.function.code.0.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.0.push(ByteCode::op(OpCode::Negate));
                         Some(func.function.place_jump(true))
                     } else {
                         None
                     };
                     linearize_exp_ref(expression, func, true);
                     func.function
-                        .code
+                        .code.0
                         .push(ByteCode::op(OpCode::AssignReference));
-                    func.function.code.push(ByteCode::val(target_index));
-                    func.function.code.push(ByteCode {
+                    func.function.code.0.push(ByteCode::val(target_index));
+                    func.function.code.0.push(ByteCode {
                         let_assign: flags.intersects(AssignmentFlags::LET),
                     });
                     if let Some(jump_instruction) = skip_index {
@@ -750,38 +841,38 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                     linearize_exp_ref(index, func, true);
 
                     let skip_index = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                        func.function.code.push(ByteCode::val(1));
-                        func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+                        func.function.code.0.push(ByteCode::op(OpCode::DuplicateDeep));
+                        func.function.code.0.push(ByteCode::val(1));
+                        func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
                         let pool_index = func.function.add_reference(String::from("@index_get"));
-                        func.function.code.push(ByteCode::val(pool_index));
-                        func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                        func.function.code.push(ByteCode::val(1));
-                        func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-                        func.function.code.push(ByteCode::val(1));
-                        func.function.code.push(ByteCode::op(OpCode::IsNull));
-                        func.function.code.push(ByteCode::op(OpCode::Negate));
+                        func.function.code.0.push(ByteCode::val(pool_index));
+                        func.function.code.0.push(ByteCode::op(OpCode::DuplicateDeep));
+                        func.function.code.0.push(ByteCode::val(1));
+                        func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+                        func.function.code.0.push(ByteCode::val(1));
+                        func.function.code.0.push(ByteCode::op(OpCode::IsNull));
+                        func.function.code.0.push(ByteCode::op(OpCode::Negate));
                         Some(func.function.place_jump(true))
                     } else {
                         None
                     };
-                    func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                    func.function.code.push(ByteCode::val(1));
-                    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+                    func.function.code.0.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.function.code.0.push(ByteCode::val(1));
+                    func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
                     let pool_index = func.function.add_reference(String::from("@index_set"));
-                    func.function.code.push(ByteCode::val(pool_index));
-                    func.function.code.push(ByteCode::op(OpCode::DuplicateDeep));
-                    func.function.code.push(ByteCode::val(1));
+                    func.function.code.0.push(ByteCode::val(pool_index));
+                    func.function.code.0.push(ByteCode::op(OpCode::DuplicateDeep));
+                    func.function.code.0.push(ByteCode::val(1));
                     linearize_exp_ref(expression, func, true);
-                    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-                    func.function.code.push(ByteCode::val(2));
+                    func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+                    func.function.code.0.push(ByteCode::val(2));
                     if let Some(jump_instruction) = skip_index {
                         func.function
                             .set_jump(jump_instruction, func.function.current_index());
                     }
 
-                    func.function.code.push(ByteCode::op(OpCode::Pop));
-                    func.function.code.push(ByteCode::op(OpCode::Pop));
+                    func.function.code.0.push(ByteCode::op(OpCode::Pop));
+                    func.function.code.0.push(ByteCode::op(OpCode::Pop));
                 }
             };
 
@@ -791,14 +882,14 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
             func.function
-                .code
+                .code.0
                 .push(ByteCode::op(OpCode::DivideTruncate));
             true
         }
         Expression::Exponent { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Exponent));
+            func.function.code.0.push(ByteCode::op(OpCode::Exponent));
             true
         }
         Expression::Compare {
@@ -808,20 +899,20 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
         } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Compare));
-            func.function.code.push(ByteCode { compare: operation });
+            func.function.code.0.push(ByteCode::op(OpCode::Compare));
+            func.function.code.0.push(ByteCode { compare: operation });
             true
         }
         Expression::And { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::And));
+            func.function.code.0.push(ByteCode::op(OpCode::And));
             true
         }
         Expression::Or { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Or));
+            func.function.code.0.push(ByteCode::op(OpCode::Or));
             true
         }
         Expression::FunctionDeclaration {
@@ -832,52 +923,52 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             let new_func = linearize(body, params, binds);
             let index = func.sub_functions.len();
             func.sub_functions.push(new_func);
-            func.function.code.push(ByteCode::op(OpCode::PushFunction));
-            func.function.code.push(ByteCode::val(index));
+            func.function.code.0.push(ByteCode::op(OpCode::PushFunction));
+            func.function.code.0.push(ByteCode::val(index));
             true
         }
         Expression::Return { value } => {
             linearize_exp_ref(value, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Return));
+            func.function.code.0.push(ByteCode::op(OpCode::Return));
             false
         }
         Expression::ListDeclaration { values } => {
             // TODO: Create List Object
-            func.function.code.push(ByteCode::op(OpCode::PushBuiltin));
+            func.function.code.0.push(ByteCode::op(OpCode::PushBuiltin));
             let pool_index = func.function.add_reference(String::from("List"));
-            func.function.code.push(ByteCode::val(pool_index));
+            func.function.code.0.push(ByteCode::val(pool_index));
             let num_values = values.len();
             values
                 .into_iter()
                 .for_each(|value| linearize_exp_ref(value, func, true));
-            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.function.code.push(ByteCode::val(num_values));
+            func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+            func.function.code.0.push(ByteCode::val(num_values));
             true
         }
         Expression::ListAccess { target, index } => {
             linearize_exp_ref(target, func, true);
-            func.function.code.push(ByteCode::op(OpCode::FieldAccess));
+            func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
             let pool_index = func.function.add_reference(String::from("@index_get"));
-            func.function.code.push(ByteCode::val(pool_index));
+            func.function.code.0.push(ByteCode::val(pool_index));
             linearize_exp_ref(index, func, true);
-            func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-            func.function.code.push(ByteCode::val(1));
+            func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+            func.function.code.0.push(ByteCode::val(1));
             true
         }
         Expression::SelfReference => {
-            func.function.code.push(ByteCode::op(OpCode::PushSelf));
+            func.function.code.0.push(ByteCode::op(OpCode::PushSelf));
             true
         }
         Expression::Yield { value } => {
             func.function.is_generator = true;
             linearize_exp_ref(value, func, true);
-            func.function.code.push(ByteCode::op(OpCode::Yield));
+            func.function.code.0.push(ByteCode::op(OpCode::Yield));
             false
         }
     };
     match (expand_stack, created_value) {
         (true, false) => panic!(),
-        (false, true) => func.function.code.push(ByteCode::op(OpCode::Pop)),
+        (false, true) => func.function.code.0.push(ByteCode::op(OpCode::Pop)),
         _ => {}
     }
 }
@@ -915,65 +1006,65 @@ fn linearize_compare(
     linearize_exp_ref(lhs, func, true);
     linearize_exp_ref(rhs, func, true);
     func.function
-        .code
+        .code.0
         .push(ByteCode::op(OpCode::ComparisonJump));
     let jump_table = func.function.current_index();
-    func.function.code.push(ByteCode::zero());
-    func.function.code.push(ByteCode::zero());
-    func.function.code.push(ByteCode::zero());
+    func.function.code.0.push(ByteCode::zero());
+    func.function.code.0.push(ByteCode::zero());
+    func.function.code.0.push(ByteCode::zero());
     let indexes = body
         .into_iter()
         .map(|expr| {
             let start_index = func.function.current_index();
-            func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+            func.function.code.0.push(ByteCode::op(OpCode::ScopeUp));
             linearize_exp_ref(expr, func, false);
-            func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+            func.function.code.0.push(ByteCode::op(OpCode::ScopeDown));
             let jump_out_index = func.function.place_jump(false);
             (start_index, jump_out_index)
         })
         .collect::<Vec<_>>();
-    func.function.code[jump_table + 0].value = indexes[greater as usize].0 as u64;
-    func.function.code[jump_table + 1].value = indexes[less as usize].0 as u64;
-    func.function.code[jump_table + 2].value = indexes[equal as usize].0 as u64;
+    func.function.code.0[jump_table + 0].value = indexes[greater as usize].0 as u64;
+    func.function.code.0[jump_table + 1].value = indexes[less as usize].0 as u64;
+    func.function.code.0[jump_table + 2].value = indexes[equal as usize].0 as u64;
     let jump_out_to = func.function.current_index();
     indexes.into_iter().for_each(|(_, jump_out_index)| {
-        func.function.code[jump_out_index].value = jump_out_to as u64
+        func.function.code.0[jump_out_index].value = jump_out_to as u64
     });
 }
 
 fn linearize_for(variable: String, iterable: ExpRef, body: ExpRef, func: &mut BasicFunction) {
     linearize_exp_ref(iterable, func, true);
     let condition_idx = func.function.current_index();
-    func.function.code.push(ByteCode::op(OpCode::Duplicate));
+    func.function.code.0.push(ByteCode::op(OpCode::Duplicate));
     let has_next_reference = func.function.add_reference("hasNext".to_string());
-    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
-    func.function.code.push(ByteCode::val(has_next_reference));
-    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-    func.function.code.push(ByteCode::zero());
-    func.function.code.push(ByteCode::op(OpCode::Negate));
+    func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
+    func.function.code.0.push(ByteCode::val(has_next_reference));
+    func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+    func.function.code.0.push(ByteCode::zero());
+    func.function.code.0.push(ByteCode::op(OpCode::Negate));
     let store_loop_end_idx = func.function.place_jump(true);
-    func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+    func.function.code.0.push(ByteCode::op(OpCode::ScopeUp));
     // AssignReference, // 1 Stack Value (value) and 2 opcode (reference, type)
-    func.function.code.push(ByteCode::op(OpCode::Duplicate));
+    func.function.code.0.push(ByteCode::op(OpCode::Duplicate));
     let next_reference = func.function.add_reference("next".to_string());
-    func.function.code.push(ByteCode::op(OpCode::FieldAccess));
-    func.function.code.push(ByteCode::val(next_reference));
-    func.function.code.push(ByteCode::op(OpCode::FunctionCall));
-    func.function.code.push(ByteCode::zero());
+    func.function.code.0.push(ByteCode::op(OpCode::FieldAccess));
+    func.function.code.0.push(ByteCode::val(next_reference));
+    func.function.code.0.push(ByteCode::op(OpCode::FunctionCall));
+    func.function.code.0.push(ByteCode::zero());
 
     let target_idx = func.function.add_reference(variable);
     func.function
-        .code
+        .code.0
         .push(ByteCode::op(OpCode::AssignReference));
-    func.function.code.push(ByteCode::val(target_idx));
-    func.function.code.push(ByteCode { let_assign: true });
+    func.function.code.0.push(ByteCode::val(target_idx));
+    func.function.code.0.push(ByteCode { let_assign: true });
     linearize_exp_ref(body, func, false);
-    func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+    func.function.code.0.push(ByteCode::op(OpCode::ScopeDown));
     func.function.place_jump_to(false, condition_idx);
 
     func.function
         .set_jump(store_loop_end_idx, func.function.current_index());
-    func.function.code.push(ByteCode::op(OpCode::Pop));
+    func.function.code.0.push(ByteCode::op(OpCode::Pop));
 }
 
 fn linearize_if_else(
@@ -990,9 +1081,9 @@ fn linearize_if_else(
         })
         .collect::<Vec<_>>();
     if let Some(else_expr) = last {
-        func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+        func.function.code.0.push(ByteCode::op(OpCode::ScopeUp));
         linearize_exp_ref(else_expr, func, false);
-        func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+        func.function.code.0.push(ByteCode::op(OpCode::ScopeDown));
     }
     let jump_to_end_index = func.function.place_jump(false);
     let place_bodies = place_conditions
@@ -1000,9 +1091,9 @@ fn linearize_if_else(
         .map(|(jump_index, body)| {
             let jump_to = func.function.current_index();
             func.function.set_jump(jump_index, jump_to);
-            func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+            func.function.code.0.push(ByteCode::op(OpCode::ScopeUp));
             linearize_exp_ref(body, func, false);
-            func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+            func.function.code.0.push(ByteCode::op(OpCode::ScopeDown));
             let jump_to_end_index = func.function.place_jump(false);
             jump_to_end_index
         })
@@ -1017,11 +1108,11 @@ fn linearize_if_else(
 fn linearize_while(condition: ExpRef, body: ExpRef, func: &mut BasicFunction) {
     let begin_index = func.function.current_index();
     linearize_exp_ref(condition, func, true);
-    func.function.code.push(ByteCode::op(OpCode::Negate));
+    func.function.code.0.push(ByteCode::op(OpCode::Negate));
     let condition_jump_index = func.function.place_jump(true);
-    func.function.code.push(ByteCode::op(OpCode::ScopeUp));
+    func.function.code.0.push(ByteCode::op(OpCode::ScopeUp));
     linearize_exp_ref(body, func, false);
-    func.function.code.push(ByteCode::op(OpCode::ScopeDown));
+    func.function.code.0.push(ByteCode::op(OpCode::ScopeDown));
     func.function.place_jump_to(false, begin_index);
     let end_index = func.function.current_index();
     func.function.set_jump(condition_jump_index, end_index);
