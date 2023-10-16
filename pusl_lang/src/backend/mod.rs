@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, env, mem, io, ffi::OsStr};
+use std::{cell::RefCell, collections::HashMap, env, io, ffi::OsStr};
 
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
@@ -718,8 +718,8 @@ fn unwind_stack(
                 return Ok((error, catch.clone()));
             }
         }
-        if let Some(mut new_frame) = state.execution_stack.pop() {
-            mem::swap(&mut new_frame, &mut state.current_frame);
+        if let Some(new_frame) = state.execution_stack.pop() {
+            state.current_frame = new_frame;
             current_idx = state.current_frame.index;
         } else {
             return Err(Value::Object(error));
@@ -728,142 +728,65 @@ fn unwind_stack(
 }
 
 fn logic(lhs: Value, rhs: Value, is_and: bool) -> Value {
-    match lhs {
-        Value::Boolean(lhs) => {
-            if let Value::Boolean(rhs) = rhs {
-                let result = if is_and { lhs & rhs } else { lhs | rhs };
-                Value::Boolean(result)
-            } else {
-                panic!("Use Logical Operator with Boolean or Integer")
-            }
+    match (lhs, rhs) {
+        (Value::Boolean(lhs), Value::Boolean(rhs)) => {
+            let result = if is_and { lhs & rhs } else { lhs | rhs };
+            Value::Boolean(result)
         }
-        Value::Integer(lhs) => {
-            if let Value::Integer(rhs) = rhs {
-                let result = if is_and { lhs & rhs } else { lhs | rhs };
-                Value::Integer(result)
-            } else {
-                panic!("Use Logical Operator with Boolean or Integer")
-            }
+        (Value::Integer(lhs), Value::Integer(rhs)) => {
+            let result = if is_and { lhs & rhs } else { lhs | rhs };
+            Value::Integer(result)
         }
         _ => panic!("Use Logical Operator with Boolean or Integer"),
     }
 }
 
-#[inline]
 fn modulus(lhs: Value, rhs: Value) -> Value {
-    let lhs = if let Value::Integer(value) = lhs {
-        value
-    } else {
-        panic!("Modulus only works with Integral operands")
-    };
-
-    let rhs = if let Value::Integer(value) = rhs {
-        value
-    } else {
-        panic!("Modulus only works with Integral operands")
-    };
-    Value::Integer(lhs % rhs)
-}
-
-#[inline]
-fn addition(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Integer(lhs + rhs),
-            Value::Float(rhs) => Value::Float(lhs as f64 + rhs),
-            _ => panic!("Invalid Operand for Addition"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs + rhs as f64),
-            Value::Float(rhs) => Value::Float(lhs + rhs),
-            _ => panic!("Invalid Operand for Addition"),
-        },
-        _ => panic!("Invalid Operand for Addition"),
+    match (lhs, rhs) {
+        (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(lhs & rhs),
+        _ => panic!("Modulus only works with Integral operands"),
     }
 }
 
-#[inline]
-fn subtraction(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Integer(lhs - rhs),
-            Value::Float(rhs) => Value::Float(lhs as f64 - rhs),
-            _ => panic!("Invalid Operand for Subtraction"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs - rhs as f64),
-            Value::Float(rhs) => Value::Float(lhs - rhs),
-            _ => panic!("Invalid Operand for Subtraction"),
-        },
-        _ => panic!("Invalid Operand for Subtraction"),
+macro_rules! value_arith_op {
+    ($name:ident, $op:tt) => {
+        fn $name(lhs: Value, rhs: Value) -> Value {
+            match (lhs, rhs) {
+                (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(lhs $op rhs),
+                (Value::Float(lhs), Value::Integer(rhs)) => Value::Float(lhs $op rhs as f64),
+                (Value::Integer(lhs), Value::Float(rhs)) => Value::Float(lhs as f64 $op rhs),
+                (Value::Float(lhs), Value::Float(rhs)) => Value::Float(lhs $op rhs),
+                _ => panic!("Invalid Operand for {}", stringify!($name)),
+            }
+        }
     }
 }
 
-#[inline]
-fn multiplication(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Integer(lhs * rhs),
-            Value::Float(rhs) => Value::Float(lhs as f64 * rhs),
-            _ => panic!("Invalid Operand for Multiplication"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs * rhs as f64),
-            Value::Float(rhs) => Value::Float(lhs * rhs),
-            _ => panic!("Invalid Operand for Multiplication"),
-        },
-        _ => panic!("Invalid Operand for Multiplication"),
-    }
-}
-
-#[inline]
-fn division(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs as f64 / rhs as f64),
-            Value::Float(rhs) => Value::Float(lhs as f64 / rhs),
-            _ => panic!("Invalid Operand for Division"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs / rhs as f64),
-            Value::Float(rhs) => Value::Float(lhs / rhs),
-            _ => panic!("Invalid Operand for Division"),
-        },
-        _ => panic!("Invalid Operand for Division"),
-    }
-}
+value_arith_op!(addition, +);
+value_arith_op!(subtraction, -);
+value_arith_op!(multiplication, *);
+value_arith_op!(division, /);
 
 #[inline]
 fn truncate_division(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Integer(lhs / rhs),
-            Value::Float(rhs) => Value::Integer((lhs as f64 / rhs) as i64),
-            _ => panic!("Invalid Operand for TruncDivision"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Integer((lhs / rhs as f64) as i64),
-            Value::Float(rhs) => Value::Integer((lhs / rhs) as i64),
-            _ => panic!("Invalid Operand for TruncDivision"),
-        },
-        _ => panic!("Invalid Operand for TruncDivision"),
+    match (lhs, rhs) {
+        (Value::Integer(lhs), Value::Integer(rhs)) => Value::Integer(lhs / rhs),
+        (Value::Float(lhs), Value::Integer(rhs)) => Value::Integer((lhs / rhs as f64) as i64),
+        (Value::Integer(lhs), Value::Float(rhs)) => Value::Integer((lhs as f64 / rhs) as i64),
+        (Value::Float(lhs), Value::Float(rhs)) => Value::Integer((lhs / rhs) as i64),
+        _ => panic!("Invalid Operand for {}", "truncate_division"),
     }
 }
 
 #[inline]
 fn exponent(lhs: Value, rhs: Value) -> Value {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float((lhs as f64).powi(rhs as i32)),
-            Value::Float(rhs) => Value::Float((lhs as f64).powf(rhs)),
-            _ => panic!("Invalid Operand for Exponent"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => Value::Float(lhs.powi(rhs as i32)),
-            Value::Float(rhs) => Value::Float(lhs.powf(rhs)),
-            _ => panic!("Invalid Operand for Exponent"),
-        },
-        _ => panic!("Invalid Operand for Exponent"),
+    match (lhs, rhs) {
+        (Value::Integer(lhs), Value::Integer(rhs)) if rhs >= 0 => Value::Integer(lhs.pow(rhs as u32)),
+        (Value::Integer(lhs), Value::Integer(rhs)) if rhs < 0 => Value::Float((lhs as f64).powi(rhs as i32)),
+        (Value::Float(lhs), Value::Integer(rhs)) => Value::Float(lhs.powi(rhs as i32)),
+        (Value::Integer(lhs), Value::Float(rhs)) => Value::Float((lhs as f64).powf(rhs)),
+        (Value::Float(lhs), Value::Float(rhs)) => Value::Float(lhs.powf(rhs)),
+        _ => panic!("Invalid Operand for {}", "exponent"),
     }
 }
 
@@ -973,17 +896,11 @@ fn compare(lhs: Value, rhs: Value, compare: Compare) -> Value {
 }
 
 fn compare_numerical(lhs: Value, rhs: Value) -> Ordering {
-    match lhs {
-        Value::Integer(lhs) => match rhs {
-            Value::Integer(rhs) => lhs.cmp(&rhs),
-            Value::Float(rhs) => (lhs as f64).partial_cmp(&rhs).expect("Comparison Failed!"),
-            _ => panic!("Cannot Compare non-numeric types"),
-        },
-        Value::Float(lhs) => match rhs {
-            Value::Integer(rhs) => lhs.partial_cmp(&(rhs as f64)).expect("Comparison Failed!"),
-            Value::Float(rhs) => lhs.partial_cmp(&rhs).expect("Comparison Failed!"),
-            _ => panic!("Cannot Compare non-numeric types"),
-        },
-        _ => panic!("Cannot Compare non-numeric types"),
+    match (lhs, rhs) {
+        (Value::Integer(lhs), Value::Integer(rhs)) => lhs.cmp(&rhs),
+        (Value::Float(lhs), Value::Integer(rhs)) => lhs.partial_cmp(&(rhs as f64)).expect("Comparison Failed"),
+        (Value::Integer(lhs), Value::Float(rhs)) => (lhs as f64).partial_cmp(&rhs).expect("Comparison Failed"),
+        (Value::Float(lhs), Value::Float(rhs)) => lhs.partial_cmp(&rhs).expect("Comparison Failed"),
+        _ => panic!("Cannot compare non-numerical types"),
     }
 }
