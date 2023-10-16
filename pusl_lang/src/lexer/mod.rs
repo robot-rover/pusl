@@ -9,7 +9,6 @@ use crate::lexer::token::{Block, BlockType, Keyword, LexUnit, Literal, Symbol, T
 use std::cmp;
 use std::iter::Peekable;
 use std::str::Chars;
-use crate::backend::linearize::OpCode::Modulus;
 
 pub mod peek_while;
 pub mod token;

@@ -1,8 +1,8 @@
 mod test_util;
 
-use pusl_lang::backend::linearize::{
-    linearize_file, BasicFunction, ByteCodeArray, ByteCodeFile, Function,
-};
+use pusl_lang::backend::{linearize::{
+    linearize_file, BasicFunction, ByteCodeFile, Function,
+}, opcode::ByteCodeArray};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use test_util::compare_test;

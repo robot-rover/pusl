@@ -20,14 +20,15 @@ pub mod debug;
 pub mod generator;
 pub mod linearize;
 pub mod list;
+pub mod opcode;
 
 use fmt::Formatter;
 use std::ops::Deref;
 
 use crate::backend::ExecuteReturn::{Return, Yield};
-use linearize::{OpCode, ResolvedFunction};
+use linearize::ResolvedFunction;
 
-use self::object::{FunctionTarget, NativeFn};
+use self::{object::{FunctionTarget, NativeFn}, opcode::OpCode};
 
 // TODO: Convert Self references to use bound values idx 0
 pub struct BoundFunction {
@@ -111,7 +112,7 @@ impl StackFrame {
     }
 
     pub fn get_code(&mut self) -> Option<OpCode> {
-        let code = self.bfunc.target.function.get_code(self.index);
+        let code = self.bfunc.target.function.code.get(self.index);
         code.as_ref().map(|(_, new_offset)| self.index = *new_offset);
         code.map(|(code, _)| code)
     }
@@ -161,7 +162,7 @@ impl<'a> Debug for ExecutionState<'a> {
             .target
             .function
             .code
-            .get_offset(self.current_frame.index);
+            .get(self.current_frame.index);
         if let Some(current_op) = current_op {
             current_op.0.format_opcode(self.current_frame.index, f, &self.current_frame.bfunc.target.function)
         } else {
