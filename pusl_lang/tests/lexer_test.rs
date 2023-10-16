@@ -16,3 +16,12 @@ fn lex_small_test() {
         assert_eq!(expected.len(), actual.len());
     });
 }
+
+#[test]
+fn error_test() {
+    let lines = include_str!("../../resources/errors.pusl").lines();
+    let roots = lex(lines);
+    for root in roots {
+        print!("{:?}", root);
+    }
+}

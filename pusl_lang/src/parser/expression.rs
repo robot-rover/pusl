@@ -117,6 +117,10 @@ pub enum Expression {
         value: ExpRef,
     },
 
+    Yeet {
+        value: ExpRef,
+    },
+
     Yield {
         value: ExpRef,
     },

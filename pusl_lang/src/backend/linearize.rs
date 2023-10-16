@@ -56,6 +56,7 @@ pub enum OpCodeTag {
     DuplicateDeep,  // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
     PushSelf,
     Yield, // Yield top of Stack
+    Yeet,  // Yeet top of Stack
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -93,6 +94,7 @@ pub enum OpCode {
     DuplicateDeep(usize), // 1 ByteCode Value (index of stack to duplicate (0 is top of stack))
     PushSelf,
     Yield, // Yield top of Stack
+    Yeet,  // Yeet top of Stack
 }
 
 impl OpCode {
@@ -181,6 +183,7 @@ impl OpCode {
                 write!(f, "DuplicateDeep {}", dup_index)?;
             }
             OpCode::Yield => write!(f, "Yield")?,
+            OpCode::Yeet => write!(f, "Yeet")?,
         }
 
         Ok(())
@@ -223,6 +226,7 @@ fn bytecode_decode(op_code: OpCodeTag) -> &'static [ByteCodeTag] {
         OpCodeTag::DuplicateDeep => &[Value],
         OpCodeTag::PushSelf => &[],
         OpCodeTag::Yield => &[],
+        OpCodeTag::Yeet => &[],
     }
 }
 
@@ -336,6 +340,7 @@ impl ByteCodeArray {
                     (OpCode::DuplicateDeep(dup_idx), 2)
                 }
                 OpCodeTag::Yield => (OpCode::Yield, 1),
+                OpCodeTag::Yeet => (OpCode::Yeet, 1),
             };
 
             Some((op_code, offset + delta))
@@ -379,6 +384,7 @@ impl ByteCodeArray {
             OpCode::DuplicateDeep(n) => self.0.extend([ByteCode::op(OpCodeTag::DuplicateDeep), ByteCode::val(n)]),
             OpCode::PushSelf => self.0.extend([ByteCode::op(OpCodeTag::PushSelf)]),
             OpCode::Yield => self.0.extend([ByteCode::op(OpCodeTag::Yield)]),
+            OpCode::Yeet => self.0.extend([ByteCode::op(OpCodeTag::Yeet)]),
         };
 
     }
@@ -543,7 +549,6 @@ impl ByteCode {
 
 #[derive(Serialize, Deserialize)]
 pub struct ByteCodeFile {
-    pub file: PathBuf,
     pub base_func: BasicFunction,
     pub imports: Vec<Import>,
 }
@@ -553,13 +558,12 @@ impl Debug for ByteCodeFile {
         if !f.alternate() {
             write!(
                 f,
-                "ByteCode: {}, Imports: {}, {:?}",
-                self.file.display(),
+                "ByteCode(Imports: {}, {:?})",
                 self.imports.len(),
                 self.base_func
             )?;
         } else {
-            writeln!(f, "ByteCode: {}", self.file.display())?;
+            writeln!(f, "ByteCode")?;
             writeln!(f, "Imports:")?;
             for (index, import) in self.imports.iter().enumerate() {
                 writeln!(
@@ -624,12 +628,21 @@ impl ResolvedFunction {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct ErrorCatch {
+    pub begin: usize,
+    pub filter: usize,
+    pub yoink: usize,
+    pub variable_name: String,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Function {
     pub args: Vec<String>,
     pub binds: Vec<String>,
     pub literals: Vec<Literal>,
     pub references: Vec<String>,
+    pub catches: Vec<ErrorCatch>,
     pub code: ByteCodeArray,
     pub is_generator: bool,
 }
@@ -741,9 +754,10 @@ impl Debug for Function {
         if !f.alternate() {
             write!(
                 f,
-                " - lits: {}, refs: {}, code: {}",
+                " - lits: {}, refs: {}, catches: {}, code: {}",
                 self.literals.len(),
                 self.references.len(),
+                self.catches.len(),
                 self.code.0.len(),
             )?;
         } else {
@@ -754,6 +768,14 @@ impl Debug for Function {
             writeln!(f, "References:")?;
             for (index, reference) in self.references.iter().enumerate() {
                 writeln!(f, "    {:3}; {}", index, reference)?;
+            }
+            writeln!(f, "Catches:")?;
+            for (index, catch) in self.catches.iter().enumerate() {
+                writeln!(
+                    f,
+                    "    {:3}; {}:{}, {} -> {}",
+                    index, catch.begin, catch.filter, catch.variable_name, catch.yoink
+                )?;
             }
             writeln!(f, "Code:")?;
             let mut code_iter = self.code.iter().peekable();
@@ -861,16 +883,16 @@ impl Function {
             literals: vec![],
             references: vec![],
             code: ByteCodeArray(vec![]),
+            catches: vec![],
             is_generator: false,
         }
     }
 }
 
-pub fn linearize_file(file: ParsedFile, path: PathBuf) -> ByteCodeFile {
+pub fn linearize_file(file: ParsedFile) -> ByteCodeFile {
     let ParsedFile { expr, imports } = file;
     let func = linearize(expr, vec![], vec![]);
     let bcf = ByteCodeFile {
-        file: path,
         base_func: func,
         imports,
     };
@@ -1208,6 +1230,11 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             func.function.code.0.push(ByteCode::op(OpCodeTag::Yield));
             false
         }
+        Expression::Yeet { value } => {
+            linearize_exp_ref(value, func, true);
+            func.function.code.0.push(ByteCode::op(OpCodeTag::Yeet));
+            false
+        }
     };
     match (expand_stack, created_value) {
         (true, false) => panic!(),
@@ -1233,6 +1260,12 @@ fn linearize_branch(branch: Branch, func: &mut BasicFunction) {
             iterable,
             body,
         } => linearize_for(variable, iterable, body, func),
+        Branch::TryBlock {
+            try_body,
+            filter_expr,
+            error_variable,
+            yoink_body,
+        } => linearize_try(try_body, filter_expr, error_variable, yoink_body, func),
         _ => panic!(),
     }
 }
@@ -1273,6 +1306,30 @@ fn linearize_compare(
     let jump_out_to = func.function.current_index();
     indexes.into_iter().for_each(|(_, jump_out_index)| {
         func.function.code.0[jump_out_index].value = jump_out_to as u64
+    });
+}
+
+fn linearize_try(
+    try_body: ExpRef,
+    filter_expr: ExpRef,
+    error_variable: String,
+    yoink_body: ExpRef,
+    func: &mut BasicFunction,
+) {
+    let try_begin_index = func.function.current_index();
+    linearize_exp_ref(try_body, func, false);
+    let write_skip_index_here = func.function.place_jump(false);
+    let try_filter_index = func.function.current_index();
+    linearize_exp_ref(filter_expr, func, true);
+    let try_yoink_index = func.function.current_index();
+    linearize_exp_ref(yoink_body, func, false);
+    func.function
+        .set_jump(write_skip_index_here, func.function.current_index());
+    func.function.catches.push(ErrorCatch {
+        begin: try_begin_index,
+        filter: try_filter_index,
+        yoink: try_yoink_index,
+        variable_name: error_variable,
     });
 }
 

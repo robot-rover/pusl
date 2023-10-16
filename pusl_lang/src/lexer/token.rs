@@ -68,6 +68,8 @@ pub enum BlockType {
     For,
     Cmp,
     Function,
+    Try,
+    Yoink,
 }
 
 #[derive(Serialize, Deserialize, PartialEq)]
@@ -149,6 +151,7 @@ pub enum Keyword {
     Import,
     As,
     Yield,
+    Yeet,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]

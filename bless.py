@@ -24,7 +24,6 @@ to_bless = []
 for mod in resources.glob(mod_glob):
     if not mod.is_dir:
         continue
-    print(mod)
     for tag in mod.glob(tag_glob):
         to_bless.append(tag)
 

@@ -11,6 +11,7 @@ use std::path::PathBuf;
 const SMALL_SOURCE_PATH: &'static str = "../../resources/simple_program.pusl";
 const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
 
+
 const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 
 fn check_code_equal(expect: &ByteCodeArray, actual: &ByteCodeArray, context: &str) {
@@ -31,6 +32,7 @@ fn check_function_equal(expect: &Function, actual: &Function, context: &str) {
         literals: ex_literals,
         references: ex_references,
         code: ex_code,
+        catches: ex_catches,
         is_generator: ex_is_generator,
     } = expect;
     let Function {
@@ -39,6 +41,7 @@ fn check_function_equal(expect: &Function, actual: &Function, context: &str) {
         literals: ac_literals,
         references: ac_references,
         code: ac_code,
+        catches: ac_catches,
         is_generator: ac_is_generator,
     } = actual;
 
@@ -55,6 +58,7 @@ fn check_function_equal(expect: &Function, actual: &Function, context: &str) {
         context
     );
     check_code_equal(ex_code, ac_code, context);
+    assert_eq!(ex_catches, ac_catches, "Function {} catches mismatch", context);
     assert_eq!(
         ex_is_generator, ac_is_generator,
         "Function {} is_generator mismatch",
@@ -85,17 +89,13 @@ fn check_basic_function_equal(expect: &BasicFunction, actual: &BasicFunction, co
 
 fn check_bcf_equal(expect: &ByteCodeFile, actual: &ByteCodeFile) {
     let ByteCodeFile {
-        file: ex_file,
         base_func: ex_base_func,
         imports: ex_imports,
     } = expect;
     let ByteCodeFile {
-        file: ac_file,
         base_func: ac_base_func,
         imports: ac_imports,
     } = actual;
-
-    assert_eq!(ex_file, ac_file, "Paths do not match");
 
     for (idx, (ex_import, ac_import)) in ex_imports.into_iter().zip(ac_imports).enumerate() {
         assert_eq!(ex_import, ac_import, "Import #{} doesn't match", idx)
@@ -111,11 +111,20 @@ fn check_bcf_equal(expect: &ByteCodeFile, actual: &ByteCodeFile) {
 }
 
 #[test]
+fn error_test() {
+    let lines = include_str!("../../resources/errors.pusl").lines();
+    let roots = lex(lines);
+    let ast = parse(roots);
+    let code = linearize_file(ast);
+    println!("{:#?}", code);
+}
+
+#[test]
 fn linear_simple_test() {
     let lines = SECOND_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from("secondary_source"));
+    let code = linearize_file(ast);
     println!("{:#?}", code);
 
     compare_test(&code, "linear", "simple", check_bcf_equal);
@@ -126,7 +135,7 @@ fn linear_small_test() {
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    let code = linearize_file(ast, PathBuf::from(SMALL_SOURCE_PATH));
+    let code = linearize_file(ast);
     println!("{:#?}", code);
 
     compare_test(&code, "linear", "small", check_bcf_equal);

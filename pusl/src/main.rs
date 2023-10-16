@@ -27,14 +27,15 @@ fn compile_from_source_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCo
         println!("Using input file: {}", path.display());
     }
     let input_file = File::open(path)?;
-    let reader = BufReader::new(input_file);
-    let mut lines = Vec::new();
-    for line in reader.lines() {
-        lines.push(line?);
-    }
+    let lines = BufReader::new(input_file)
+        .lines()
+        .collect::<Result<Vec<String>, _>>()?;
     let tokens = lex(lines.iter().map(|str| str.as_str()));
     let ast = parse(tokens);
-    let base_func = linearize_file(ast, PathBuf::new());
+    let base_func = linearize_file(ast);
+    if verbosity >= 2 {
+        println!("{:?}", &base_func);
+    }
     Ok(base_func)
 }
 
@@ -158,7 +159,7 @@ fn main() -> io::Result<()> {
                 println!("{:#?}", bcf.base_func);
             } else {
                 let ctx = ExecContext { resolve: |_| None };
-                startup(bcf, ctx);
+                startup(bcf, path, ctx);
             }
         }
         ("interpret", Some(matches)) => {
@@ -166,7 +167,7 @@ fn main() -> io::Result<()> {
 
             let bcf = compile_from_source_path(&path, verbosity)?;
             let ctx = ExecContext { resolve: |_| None };
-            startup(bcf, ctx);
+            startup(bcf, path, ctx);
         }
         _ => println!("{}", matches.usage()),
     }

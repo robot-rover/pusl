@@ -23,3 +23,18 @@ fn parse_small_test() {
 
     compare_test_eq(&ast, "parse", "small");
 }
+
+#[test]
+fn error_test() {
+    let lines = include_str!("../../resources/errors.pusl").lines();
+    let roots = lex(lines);
+    println!("{:?}", roots.last());
+    let ast = parse(roots);
+    let ParsedFile { expr, imports } = ast;
+    if let Eval::Expression(Expression::Joiner { expressions }) = *expr {
+        for expr in expressions {
+            println!("{:#?}", expr);
+        }
+    }
+    println!("{:#?}", imports);
+}
