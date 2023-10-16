@@ -1,7 +1,8 @@
-use std::{cell::RefCell, collections::HashMap, env, mem};
+use std::{cell::RefCell, collections::HashMap, env, mem, io::{self, stdout}, borrow::Cow};
 
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
+use supercow::Supercow;
 
 use crate::backend::linearize::{ByteCodeFile, ErrorCatch};
 use crate::backend::object::{is_instance_of, FnPtr, Object, ObjectPtr, PuslObject, Value};
@@ -116,13 +117,14 @@ impl StackFrame {
     }
 }
 
-pub struct ExecContext {
+pub struct ExecContext<'a> {
     pub resolve: fn(PathBuf) -> Option<ByteCodeFile>,
+    pub stream: Option<&'a mut dyn io::Write>,
 }
 
-impl Default for ExecContext {
+impl<'a> Default for ExecContext<'a> {
     fn default() -> Self {
-        ExecContext { resolve: |_| None }
+        ExecContext { resolve: |_| None, stream: None }
     }
 }
 
@@ -148,6 +150,7 @@ pub struct ExecutionState<'a> {
     builtins: HashMap<&'static str, Value>,
     builtin_data: AnyMap,
     registry: Vec<NativeFn<'a>>,
+    stream: &'a mut dyn io::Write,
 }
 
 impl<'a> Debug for ExecutionState<'a> {
@@ -171,7 +174,7 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
     let mut registry = Vec::new();
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
-    let ExecContext { resolve } = ctx;
+    let ExecContext { resolve, stream } = ctx;
     let mut resolved_imports = Vec::<(PathBuf, ObjectPtr)>::new();
     let mut resolve_stack = vec![(main_path, main)];
     let mut index = 0;
@@ -200,6 +203,9 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
     let (current_frame, resolution) = process_bcf(top, main_path, &resolved_imports, &mut gc);
     resolved_imports.push(resolution);
 
+    let mut stdout_handle = None;
+
+    let stream = stream.unwrap_or_else(|| stdout_handle.insert(io::stdout()));
     let state = ExecutionState {
         imports: resolved_imports,
         execution_stack: Vec::new(),
@@ -209,6 +215,7 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
         builtins,
         builtin_data,
         registry,
+        stream,
     };
 
     let rstate = RefCell::new(state);

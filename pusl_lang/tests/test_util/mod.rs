@@ -4,17 +4,21 @@ use std::{
     io,
 };
 
-const RESOURCES: &str = "../resources/";
+const RESOURCES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../resources");
+const TARGET: &str = env!("CARGO_TARGET_TMPDIR");
 
 pub fn compare_test<T, F>(actual: &T, test_mod: &str, test_tag: &str, compare_fn: F)
 where
     for<'a> T: Serialize + Deserialize<'a>,
     F: FnOnce(&T, &T),
 {
-    let mod_dir = format!("{RESOURCES}/{test_mod}");
-    fs::create_dir_all(mod_dir).unwrap();
-    let actual_file = format!("{RESOURCES}/{test_mod}/{test_tag}-actual.json");
+    let expect_mod_dir = format!("{RESOURCES}/{test_mod}");
+    fs::create_dir_all(expect_mod_dir).unwrap();
+    let actual_mod_dir = format!("{TARGET}/{test_mod}");
+    fs::create_dir_all(actual_mod_dir).unwrap();
+
     let expect_file = format!("{RESOURCES}/{test_mod}/{test_tag}-expect.json");
+    let actual_file = format!("{TARGET}/{test_mod}/{test_tag}-actual.json");
 
     let mut out_stream = io::BufWriter::new(fs::File::create(actual_file).expect("Cannot open actual output json"));
     serde_json::to_writer_pretty(&mut out_stream, &actual).expect("Cannot serialize actual output json");

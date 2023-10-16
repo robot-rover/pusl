@@ -35,9 +35,10 @@ print("Slope: ", test, "\n")
 
 let test = Object()
 let test.field = 83.4
+let test.field2 = test.field
 test.field = "Crazy Horse"
 let test.prin = print
-test.prin(test.field, " | ", test, "\n")
+test.prin(test.field, " | ", test.field2, "\n")
 
 let answer = 41
 answer = answer + 1

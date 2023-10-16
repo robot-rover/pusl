@@ -22,7 +22,7 @@ try:
     error_type.testfn()
 yoink error_type test2:
     print("Caught\n")
-    print(test2, "\n")
+    print(test2.message, "\n")
 print("Done2!\n")
 
 let root = Object()

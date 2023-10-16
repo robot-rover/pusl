@@ -586,8 +586,15 @@
                             "arguments": [
                               {
                                 "Expression": {
-                                  "Reference": {
-                                    "target": "test2"
+                                  "FieldAccess": {
+                                    "target": {
+                                      "Expression": {
+                                        "Reference": {
+                                          "target": "test2"
+                                        }
+                                      }
+                                    },
+                                    "name": "message"
                                   }
                                 }
                               },

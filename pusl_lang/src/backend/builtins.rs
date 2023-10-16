@@ -29,9 +29,9 @@ fn type_of(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> 
     Value::String(gc_ptr)
 }
 
-fn print(args: Vec<Value>, _: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn print(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
     for value in args.into_iter() {
-        print!("{}", value);
+        write!(st.borrow_mut().stream, "{}", value).unwrap();
     }
     Value::Null
 }

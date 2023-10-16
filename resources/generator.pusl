@@ -35,7 +35,7 @@ while i < 15:
 let idx = range(0,l.len())
 while idx.hasNext():
     print(l[idx.next()], ", ")
-print(l, "\n")
+# print(l, "\n")
 
 for num in range(11, 15):
     print(num, ", ")

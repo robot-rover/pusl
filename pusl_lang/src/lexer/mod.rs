@@ -276,6 +276,9 @@ fn lex_line(line: &str) -> (Vec<Token>, Vec<IndentChar>) {
             ))));
         } else if c == ' ' {
             peek_while(&mut cursor, |&c| c == ' ').count();
+        } else if c == '#' {
+            // Rest of line is a comment
+            break;
         } else {
             tokens.push(Token::Symbol(read_symbol(&mut cursor)));
         }

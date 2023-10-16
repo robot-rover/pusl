@@ -494,6 +494,12 @@
               "Reference": "test2"
             },
             {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "message"
+            },
+            {
               "Symbol": "Comma"
             },
             {
