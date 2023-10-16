@@ -1,14 +1,12 @@
 extern crate pusl_lang;
 
 use pusl_lang::backend::linearize::{
-    linearize_file, BasicFunction, ByteCode, ByteCodeArray, ByteCodeFile, Function,
+    linearize_file, BasicFunction, ByteCodeArray, ByteCodeFile, Function,
 };
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use pusl_lang::test_util::compare_test;
-use std::path::PathBuf;
 
-const SMALL_SOURCE_PATH: &'static str = "../../resources/simple_program.pusl";
 const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
 
 

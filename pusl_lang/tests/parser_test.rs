@@ -21,7 +21,7 @@ fn parse_small_test() {
         }
     }
 
-    compare_test_eq(&ast, "parse", "small");
+    compare_test_eq(&ast.expr, "parse", "small");
 }
 
 #[test]
@@ -37,4 +37,5 @@ fn error_test() {
         }
     }
     println!("{:#?}", imports);
+    // TODO: Use Compare Test
 }

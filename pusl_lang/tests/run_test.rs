@@ -37,6 +37,7 @@ fn run_small_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
+    println!("{:#?}", code);
     let path = PathBuf::from("../../resources/simple_program.pusl");
     let ctx = ExecContext {
         resolve: test_resolve,
@@ -49,7 +50,9 @@ fn error_test() {
     let lines = include_str!("../../resources/errors.pusl").lines();
     let roots = lex(lines);
     let ast = parse(roots);
+    println!("{:#?}", ast);
     let code = linearize_file(ast);
+    println!("{:#?}", code);
     let path = PathBuf::from("../resources/errors.pusl");
     let ctx = ExecContext {
         resolve: test_resolve,
@@ -65,6 +68,7 @@ fn run_fibb_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
+    println!("{:#?}", code);
     let path = PathBuf::from("../../resources/fibb.pusl");
     let ctx = ExecContext { resolve: |_| None };
     startup(code, path, ctx);

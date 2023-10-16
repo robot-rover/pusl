@@ -538,13 +538,6 @@ impl ByteCode {
         unsafe { self.let_assign }
     }
 
-    unsafe fn from_u64(v: u64) -> Self {
-        std::mem::transmute::<u64, Self>(v)
-    }
-
-    pub unsafe fn to_u64(&self) -> u64 {
-        std::mem::transmute_copy::<Self, u64>(self)
-    }
 }
 
 #[derive(Serialize, Deserialize)]

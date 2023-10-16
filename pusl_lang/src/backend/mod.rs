@@ -114,24 +114,6 @@ impl StackFrame {
         code.as_ref().map(|(_, new_offset)| self.index = *new_offset);
         code.map(|(code, _)| code)
     }
-
-    pub fn get_val(&mut self) -> usize {
-        let value = self.bfunc.target.function.get_val(self.index);
-        self.index += 1;
-        value
-    }
-
-    pub fn get_cmp(&mut self) -> Compare {
-        let value = self.bfunc.target.function.get_cmp(self.index);
-        self.index += 1;
-        value
-    }
-
-    pub fn get_assign_type(&mut self) -> bool {
-        let value = self.bfunc.target.function.get_assign_type(self.index);
-        self.index += 1;
-        value
-    }
 }
 
 pub struct ExecContext {
@@ -176,9 +158,12 @@ impl<'a> Debug for ExecutionState<'a> {
             .target
             .function
             .code
-            .get_offset(self.current_frame.index - 1)
-            .unwrap();
-        current_op.0.format_opcode(self.current_frame.index - 1, f, &self.current_frame.bfunc.target.function)
+            .get_offset(self.current_frame.index);
+        if let Some(current_op) = current_op {
+            current_op.0.format_opcode(self.current_frame.index, f, &self.current_frame.bfunc.target.function)
+        } else {
+            writeln!(f, "out of bounds")
+        }
     }
 }
 
@@ -243,9 +228,9 @@ enum ExecuteReturn {
 }
 
 fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
+    let mut current_catch: Option<(ObjectPtr, ErrorCatch)> = None;
     loop {
         let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
-        let mut current_catch: Option<(ObjectPtr, ErrorCatch)> = None;
         {
             let mut state = st.borrow_mut();
             let current_idx = state.current_frame.index;
@@ -273,6 +258,14 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                     current_catch = Some((error, catch));
                 }
             }
+
+            if env::var("PUSL_TRACE").is_ok() {
+                println!("{:?}", state);
+            }
+            if env::var("PUSL_TRACE_VAR").is_ok() {
+                println!("{:?}", &state.current_frame.op_stack);
+            }
+
             let current_op = if let Some(op) = state.current_frame.get_code() {
                 op
             } else {
@@ -292,13 +285,6 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                     return Return(Value::Null);
                 }
             };
-
-            if env::var("PUSL_TRACE").is_ok() {
-                println!("{:?}", state);
-            }
-            if env::var("PUSL_TRACE_VAR").is_ok() {
-                println!("{:?}", &state.current_frame.op_stack);
-            }
 
             match current_op {
                 OpCode::Modulus => {
