@@ -1,0 +1,912 @@
+[
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "error_type"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Reference": "Object"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "error_type"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "message"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": {
+          "String": "Stupid"
+        }
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "Function",
+      "line": [
+        {
+          "Keyword": "Let"
+        },
+        {
+          "Reference": "error_type"
+        },
+        {
+          "Symbol": "Period"
+        },
+        {
+          "Reference": "testfn"
+        },
+        {
+          "Symbol": "Equals"
+        },
+        {
+          "Keyword": "Fn"
+        },
+        {
+          "Symbol": "OpenSquareBracket"
+        },
+        {
+          "Reference": "error_type"
+        },
+        {
+          "Symbol": "CloseSquareBracket"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Inside testfn\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Keyword": "Yeet"
+            },
+            {
+              "Reference": "Object"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "error_type"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Oops, didn't yeet\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Reference": "print"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Literal": {
+          "String": "a"
+        }
+      },
+      {
+        "Symbol": "Comma"
+      },
+      {
+        "Literal": {
+          "String": "\n"
+        }
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "Try",
+      "line": [
+        {
+          "Block": "Try"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "b"
+              }
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Literal": {
+                "String": "\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Keyword": "Let"
+            },
+            {
+              "Reference": "error_inst"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Reference": "Object"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "error_type"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Keyword": "Let"
+            },
+            {
+              "Reference": "error_inst"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "message"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Literal": {
+                "String": "Wow!"
+              }
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Keyword": "Yeet"
+            },
+            {
+              "Reference": "error_inst"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "Yoink",
+      "line": [
+        {
+          "Block": "Yoink"
+        },
+        {
+          "Reference": "error_type"
+        },
+        {
+          "Reference": "thrown"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Yoinking\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "thrown"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "message"
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Literal": {
+                "String": "\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "thrown"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "super"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "message"
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Literal": {
+                "String": "\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Reference": "print"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Literal": {
+          "String": "Done!\n"
+        }
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "Try",
+      "line": [
+        {
+          "Block": "Try"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Throwing inside function\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "error_type"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "testfn"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "Yoink",
+      "line": [
+        {
+          "Block": "Yoink"
+        },
+        {
+          "Reference": "error_type"
+        },
+        {
+          "Reference": "test2"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Caught\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "test2"
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Literal": {
+                "String": "\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Reference": "print"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Literal": {
+          "String": "Done2!\n"
+        }
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "root"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Reference": "Object"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "Function",
+      "line": [
+        {
+          "Keyword": "Let"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "Period"
+        },
+        {
+          "Reference": "a"
+        },
+        {
+          "Symbol": "Equals"
+        },
+        {
+          "Keyword": "Fn"
+        },
+        {
+          "Symbol": "OpenSquareBracket"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "CloseSquareBracket"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Reference": "num"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Block": {
+            "kind": "If",
+            "line": [
+              {
+                "Block": "If"
+              },
+              {
+                "Reference": "num"
+              },
+              {
+                "Symbol": "Greater"
+              },
+              {
+                "Literal": {
+                  "Integer": 10
+                }
+              },
+              {
+                "Symbol": "Colon"
+              }
+            ],
+            "children": [
+              {
+                "Statement": [
+                  {
+                    "Keyword": "Yeet"
+                  },
+                  {
+                    "Reference": "root"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "Block": {
+            "kind": "ElseIf",
+            "line": [
+              {
+                "Block": "Else"
+              },
+              {
+                "Block": "If"
+              },
+              {
+                "Reference": "num"
+              },
+              {
+                "Symbol": "Percent"
+              },
+              {
+                "Literal": {
+                  "Integer": 2
+                }
+              },
+              {
+                "Symbol": "DoubleEquals"
+              },
+              {
+                "Literal": {
+                  "Integer": 0
+                }
+              },
+              {
+                "Symbol": "Colon"
+              }
+            ],
+            "children": [
+              {
+                "Statement": [
+                  {
+                    "Reference": "root"
+                  },
+                  {
+                    "Symbol": "Period"
+                  },
+                  {
+                    "Reference": "b"
+                  },
+                  {
+                    "Symbol": "OpenParenthesis"
+                  },
+                  {
+                    "Reference": "num"
+                  },
+                  {
+                    "Symbol": "Plus"
+                  },
+                  {
+                    "Literal": {
+                      "Integer": 1
+                    }
+                  },
+                  {
+                    "Symbol": "CloseParenthesis"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "Block": {
+            "kind": "Else",
+            "line": [
+              {
+                "Block": "Else"
+              },
+              {
+                "Symbol": "Colon"
+              }
+            ],
+            "children": [
+              {
+                "Statement": [
+                  {
+                    "Reference": "root"
+                  },
+                  {
+                    "Symbol": "Period"
+                  },
+                  {
+                    "Reference": "c"
+                  },
+                  {
+                    "Symbol": "OpenParenthesis"
+                  },
+                  {
+                    "Reference": "num"
+                  },
+                  {
+                    "Symbol": "Plus"
+                  },
+                  {
+                    "Literal": {
+                      "Integer": 1
+                    }
+                  },
+                  {
+                    "Symbol": "CloseParenthesis"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "Function",
+      "line": [
+        {
+          "Keyword": "Let"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "Period"
+        },
+        {
+          "Reference": "b"
+        },
+        {
+          "Symbol": "Equals"
+        },
+        {
+          "Keyword": "Fn"
+        },
+        {
+          "Symbol": "OpenSquareBracket"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "CloseSquareBracket"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Reference": "num"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "root"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "a"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "num"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "Function",
+      "line": [
+        {
+          "Keyword": "Let"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "Period"
+        },
+        {
+          "Reference": "c"
+        },
+        {
+          "Symbol": "Equals"
+        },
+        {
+          "Keyword": "Fn"
+        },
+        {
+          "Symbol": "OpenSquareBracket"
+        },
+        {
+          "Reference": "root"
+        },
+        {
+          "Symbol": "CloseSquareBracket"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Reference": "num"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "root"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "a"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "num"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Reference": "root"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "a"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Literal": {
+          "Integer": 0
+        }
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  }
+]

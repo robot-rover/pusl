@@ -1,11 +1,11 @@
-extern crate pusl_lang;
+mod test_util;
 
 use pusl_lang::backend::linearize::{
     linearize_file, BasicFunction, ByteCodeArray, ByteCodeFile, Function,
 };
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
-use pusl_lang::test_util::compare_test;
+use test_util::compare_test;
 
 const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
 
@@ -114,7 +114,8 @@ fn error_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
-    println!("{:#?}", code);
+
+    compare_test(&code, "linear", "error", check_bcf_equal);
 }
 
 #[test]
@@ -123,7 +124,6 @@ fn linear_simple_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
-    println!("{:#?}", code);
 
     compare_test(&code, "linear", "simple", check_bcf_equal);
 }
@@ -134,7 +134,6 @@ fn linear_small_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
-    println!("{:#?}", code);
 
     compare_test(&code, "linear", "small", check_bcf_equal);
 }

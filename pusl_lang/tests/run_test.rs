@@ -6,7 +6,6 @@ use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;
 
-const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
 const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 
 fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
@@ -31,6 +30,8 @@ fn run_generator_test() {
     startup(code, path, ctx);
 }
 
+const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
+
 #[test]
 fn run_small_test() {
     let lines = SMALL_SOURCE.lines();
@@ -45,14 +46,13 @@ fn run_small_test() {
     startup(code, path, ctx);
 }
 
+const ERROR_SOURCE: &'static str = include_str!("../../resources/errors.pusl");
 #[test]
 fn error_test() {
-    let lines = include_str!("../../resources/errors.pusl").lines();
+    let lines = ERROR_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
-    println!("{:#?}", ast);
     let code = linearize_file(ast);
-    println!("{:#?}", code);
     let path = PathBuf::from("../resources/errors.pusl");
     let ctx = ExecContext {
         resolve: test_resolve,
@@ -68,7 +68,6 @@ fn run_fibb_test() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
-    println!("{:#?}", code);
     let path = PathBuf::from("../../resources/fibb.pusl");
     let ctx = ExecContext { resolve: |_| None };
     startup(code, path, ctx);

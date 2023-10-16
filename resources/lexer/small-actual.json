@@ -1,0 +1,706 @@
+[
+  {
+    "Statement": [
+      {
+        "Keyword": "Import"
+      },
+      {
+        "Reference": "alpha"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "bravo"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "charlie"
+      },
+      {
+        "Keyword": "As"
+      },
+      {
+        "Reference": "nato"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Import"
+      },
+      {
+        "Reference": "foo"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "bar"
+      },
+      {
+        "Keyword": "As"
+      },
+      {
+        "Reference": "foobar"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "a"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": "Null"
+      },
+      {
+        "Symbol": "Elvis"
+      },
+      {
+        "Literal": {
+          "Integer": 45
+        }
+      },
+      {
+        "Symbol": "Plus"
+      },
+      {
+        "Literal": {
+          "Float": 4.5
+        }
+      },
+      {
+        "Symbol": "Slash"
+      },
+      {
+        "Literal": {
+          "Integer": 2
+        }
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "mt"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Symbol": "OpenSquareBracket"
+      },
+      {
+        "Symbol": "CloseSquareBracket"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Reference": "print"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Reference": "mt"
+      },
+      {
+        "Symbol": "OpenSquareBracket"
+      },
+      {
+        "Literal": {
+          "Integer": 0
+        }
+      },
+      {
+        "Symbol": "CloseSquareBracket"
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "array"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Symbol": "OpenSquareBracket"
+      },
+      {
+        "Literal": {
+          "String": "l33t"
+        }
+      },
+      {
+        "Symbol": "Comma"
+      },
+      {
+        "Literal": {
+          "Integer": 433110
+        }
+      },
+      {
+        "Symbol": "Comma"
+      },
+      {
+        "Literal": {
+          "Float": 1.25
+        }
+      },
+      {
+        "Symbol": "CloseSquareBracket"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "i"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": {
+          "Integer": 0
+        }
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "While",
+      "line": [
+        {
+          "Block": "While"
+        },
+        {
+          "Reference": "i"
+        },
+        {
+          "Symbol": "Less"
+        },
+        {
+          "Literal": {
+            "Integer": 10
+          }
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "i"
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Literal": {
+                "String": "\n"
+              }
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Reference": "i"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Reference": "i"
+            },
+            {
+              "Symbol": "Plus"
+            },
+            {
+              "Literal": {
+                "Integer": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "whomst"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": {
+          "Integer": 10
+        }
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "If",
+      "line": [
+        {
+          "Block": "If"
+        },
+        {
+          "Reference": "houston"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "DoubleEquals"
+        },
+        {
+          "Literal": {
+            "Boolean": true
+          }
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "ElseIf",
+      "line": [
+        {
+          "Block": "Else"
+        },
+        {
+          "Block": "If"
+        },
+        {
+          "Reference": "a"
+        },
+        {
+          "Symbol": "Plus"
+        },
+        {
+          "Reference": "b"
+        },
+        {
+          "Symbol": "Greater"
+        },
+        {
+          "Literal": {
+            "Integer": 10
+          }
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "panic"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "Else",
+      "line": [
+        {
+          "Block": "Else"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Keyword": "Let"
+            },
+            {
+              "Reference": "whomst"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Literal": {
+                "String": "Heyo!"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Block": {
+      "kind": "While",
+      "line": [
+        {
+          "Block": "While"
+        },
+        {
+          "Reference": "f"
+        },
+        {
+          "Symbol": "NotEquals"
+        },
+        {
+          "Literal": {
+            "Integer": 0
+          }
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "print"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Literal": {
+                "String": "Hello World "
+              }
+            },
+            {
+              "Symbol": "Plus"
+            },
+            {
+              "Reference": "f"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "i"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": {
+          "Integer": 0
+        }
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "If",
+      "line": [
+        {
+          "Block": "If"
+        },
+        {
+          "Reference": "f"
+        },
+        {
+          "Symbol": "DoubleEquals"
+        },
+        {
+          "Literal": {
+            "Integer": 0
+          }
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "i"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Literal": {
+                "Integer": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "test"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Reference": "Object"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "counter"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Reference": "Object"
+      },
+      {
+        "Symbol": "OpenParenthesis"
+      },
+      {
+        "Symbol": "CloseParenthesis"
+      }
+    ]
+  },
+  {
+    "Statement": [
+      {
+        "Keyword": "Let"
+      },
+      {
+        "Reference": "counter"
+      },
+      {
+        "Symbol": "Period"
+      },
+      {
+        "Reference": "acc"
+      },
+      {
+        "Symbol": "Equals"
+      },
+      {
+        "Literal": {
+          "Integer": 0
+        }
+      }
+    ]
+  },
+  {
+    "Block": {
+      "kind": "Function",
+      "line": [
+        {
+          "Keyword": "Let"
+        },
+        {
+          "Reference": "test"
+        },
+        {
+          "Symbol": "Period"
+        },
+        {
+          "Reference": "fun"
+        },
+        {
+          "Symbol": "Equals"
+        },
+        {
+          "Keyword": "Fn"
+        },
+        {
+          "Symbol": "OpenSquareBracket"
+        },
+        {
+          "Reference": "counter"
+        },
+        {
+          "Symbol": "CloseSquareBracket"
+        },
+        {
+          "Symbol": "OpenParenthesis"
+        },
+        {
+          "Reference": "a"
+        },
+        {
+          "Symbol": "Comma"
+        },
+        {
+          "Reference": "b"
+        },
+        {
+          "Symbol": "Comma"
+        },
+        {
+          "Reference": "arg"
+        },
+        {
+          "Symbol": "CloseParenthesis"
+        },
+        {
+          "Symbol": "Colon"
+        }
+      ],
+      "children": [
+        {
+          "Statement": [
+            {
+              "Reference": "counter"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "acc"
+            },
+            {
+              "Symbol": "Equals"
+            },
+            {
+              "Reference": "counter"
+            },
+            {
+              "Symbol": "Period"
+            },
+            {
+              "Reference": "acc"
+            },
+            {
+              "Symbol": "Plus"
+            },
+            {
+              "Literal": {
+                "Integer": 1
+              }
+            }
+          ]
+        },
+        {
+          "Statement": [
+            {
+              "Keyword": "Return"
+            },
+            {
+              "Reference": "arg"
+            },
+            {
+              "Symbol": "OpenParenthesis"
+            },
+            {
+              "Reference": "a"
+            },
+            {
+              "Symbol": "Comma"
+            },
+            {
+              "Reference": "b"
+            },
+            {
+              "Symbol": "CloseParenthesis"
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
