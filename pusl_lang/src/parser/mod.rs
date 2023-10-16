@@ -32,7 +32,7 @@ pub struct ParsedFile {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Import {
-    pub path: PathBuf,
+    pub path: Vec<String>,
     pub alias: String,
 }
 
@@ -75,7 +75,7 @@ where
 {
     let mut iter = tokens.into_iter().peekable();
     assert_eq!(Some(Token::Keyword(Keyword::Import)), iter.next());
-    let mut path = PathBuf::new();
+    let mut path = Vec::new();
     while let Some(token) = iter.next() {
         if let Token::Reference(name) = token {
             path.push(name);

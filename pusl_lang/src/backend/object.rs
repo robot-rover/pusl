@@ -43,7 +43,9 @@ impl<'a> Debug for ObjectFmtWrapper<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0.try_borrow() {
             Ok(borrow) => Debug::fmt(&*borrow, f),
-            Err(_) => Debug::fmt(self, f),
+            Err(_) => f.debug_struct("Object")
+                .field("cannot_borrow", &true)
+                .finish_non_exhaustive(),
         }
     }
 }

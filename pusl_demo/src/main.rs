@@ -20,8 +20,8 @@ use std::{num::ParseIntError, unimplemented};
 const SMALL_SOURCE: &'static str = include_str!("../resources/simple_program.pusl");
 const SECOND_SOURCE: &'static str = include_str!("../resources/secondary_source.pusl");
 
-fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
-    assert_eq!(path.to_str().unwrap(), "secondary_source");
+fn test_resolve(path: Vec<String>) -> Option<ByteCodeFile> {
+    assert_eq!(path.join("/"), "secondary_source");
     let lines = SECOND_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
@@ -43,6 +43,7 @@ fn main() {
     let code = linearize_file(ast);
     let ctx = ExecContext {
         resolve: test_resolve,
+        stream: None,
     };
     let (command_channel_send, command_channel_recv) = mpsc::channel::<DebugCommand>();
     let (response_channel_send, response_channel_recv) = mpsc::channel::<DebugResponse>();

@@ -1,1060 +1,681 @@
 {
-  "Expression": {
-    "Joiner": {
-      "expressions": [
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Reference": {
-                  "name": "error_type"
+  "expr": {
+    "Expression": {
+      "Joiner": {
+        "expressions": [
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Reference": {
+                    "name": "error_type"
+                  }
+                },
+                "expression": {
+                  "Expression": {
+                    "FunctionCall": {
+                      "target": {
+                        "Expression": {
+                          "Reference": {
+                            "target": "Object"
+                          }
+                        }
+                      },
+                      "arguments": []
+                    }
+                  }
+                },
+                "flags": {
+                  "bits": 1
                 }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionCall": {
+              }
+            }
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Field": {
                     "target": {
                       "Expression": {
                         "Reference": {
-                          "target": "Object"
+                          "target": "error_type"
                         }
                       }
                     },
-                    "arguments": []
+                    "name": "message"
                   }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Field": {
-                  "target": {
-                    "Expression": {
-                      "Reference": {
-                        "target": "error_type"
-                      }
-                    }
-                  },
-                  "name": "message"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "Literal": {
-                    "value": {
-                      "String": "Stupid"
-                    }
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Field": {
-                  "target": {
-                    "Expression": {
-                      "Reference": {
-                        "target": "error_type"
-                      }
-                    }
-                  },
-                  "name": "testfn"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionDeclaration": {
-                    "binds": [
-                      "error_type"
-                    ],
-                    "params": [],
-                    "body": {
-                      "Expression": {
-                        "Joiner": {
-                          "expressions": [
-                            {
-                              "Expression": {
-                                "FunctionCall": {
-                                  "target": {
-                                    "Expression": {
-                                      "Reference": {
-                                        "target": "print"
-                                      }
-                                    }
-                                  },
-                                  "arguments": [
-                                    {
-                                      "Expression": {
-                                        "Literal": {
-                                          "value": {
-                                            "String": "Inside testfn\n"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            },
-                            {
-                              "Expression": {
-                                "Yeet": {
-                                  "value": {
-                                    "Expression": {
-                                      "FunctionCall": {
-                                        "target": {
-                                          "Expression": {
-                                            "Reference": {
-                                              "target": "Object"
-                                            }
-                                          }
-                                        },
-                                        "arguments": [
-                                          {
-                                            "Expression": {
-                                              "Reference": {
-                                                "target": "error_type"
-                                              }
-                                            }
-                                          }
-                                        ]
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            },
-                            {
-                              "Expression": {
-                                "FunctionCall": {
-                                  "target": {
-                                    "Expression": {
-                                      "Reference": {
-                                        "target": "print"
-                                      }
-                                    }
-                                  },
-                                  "arguments": [
-                                    {
-                                      "Expression": {
-                                        "Literal": {
-                                          "value": {
-                                            "String": "Oops, didn't yeet\n"
-                                          }
-                                        }
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "FunctionCall": {
-              "target": {
-                "Expression": {
-                  "Reference": {
-                    "target": "print"
-                  }
-                }
-              },
-              "arguments": [
-                {
+                },
+                "expression": {
                   "Expression": {
                     "Literal": {
                       "value": {
-                        "String": "a"
+                        "String": "Stupid"
                       }
                     }
                   }
                 },
-                {
-                  "Expression": {
-                    "Literal": {
-                      "value": {
-                        "String": "\n"
-                      }
-                    }
-                  }
+                "flags": {
+                  "bits": 1
                 }
-              ]
+              }
             }
-          }
-        },
-        {
-          "Branch": {
-            "TryBlock": {
-              "try_body": {
-                "Expression": {
-                  "Joiner": {
-                    "expressions": [
-                      {
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Field": {
+                    "target": {
+                      "Expression": {
+                        "Reference": {
+                          "target": "error_type"
+                        }
+                      }
+                    },
+                    "name": "testfn"
+                  }
+                },
+                "expression": {
+                  "Expression": {
+                    "FunctionDeclaration": {
+                      "binds": [
+                        "error_type"
+                      ],
+                      "params": [],
+                      "body": {
                         "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
+                          "Joiner": {
+                            "expressions": [
                               {
                                 "Expression": {
-                                  "Literal": {
+                                  "FunctionCall": {
+                                    "target": {
+                                      "Expression": {
+                                        "Reference": {
+                                          "target": "print"
+                                        }
+                                      }
+                                    },
+                                    "arguments": [
+                                      {
+                                        "Expression": {
+                                          "Literal": {
+                                            "value": {
+                                              "String": "Inside testfn\n"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "Expression": {
+                                  "Yeet": {
                                     "value": {
-                                      "String": "b"
+                                      "Expression": {
+                                        "FunctionCall": {
+                                          "target": {
+                                            "Expression": {
+                                              "Reference": {
+                                                "target": "Object"
+                                              }
+                                            }
+                                          },
+                                          "arguments": [
+                                            {
+                                              "Expression": {
+                                                "Reference": {
+                                                  "target": "error_type"
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      }
                                     }
                                   }
                                 }
                               },
                               {
                                 "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "\n"
-                                    }
+                                  "FunctionCall": {
+                                    "target": {
+                                      "Expression": {
+                                        "Reference": {
+                                          "target": "print"
+                                        }
+                                      }
+                                    },
+                                    "arguments": [
+                                      {
+                                        "Expression": {
+                                          "Literal": {
+                                            "value": {
+                                              "String": "Oops, didn't yeet\n"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
                                   }
                                 }
                               }
                             ]
                           }
                         }
-                      },
-                      {
-                        "Expression": {
-                          "Assigment": {
-                            "target": {
-                              "Reference": {
-                                "name": "error_inst"
+                      }
+                    }
+                  }
+                },
+                "flags": {
+                  "bits": 1
+                }
+              }
+            }
+          },
+          {
+            "Expression": {
+              "FunctionCall": {
+                "target": {
+                  "Expression": {
+                    "Reference": {
+                      "target": "print"
+                    }
+                  }
+                },
+                "arguments": [
+                  {
+                    "Expression": {
+                      "Literal": {
+                        "value": {
+                          "String": "a"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "Expression": {
+                      "Literal": {
+                        "value": {
+                          "String": "\n"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "Branch": {
+              "TryBlock": {
+                "try_body": {
+                  "Expression": {
+                    "Joiner": {
+                      "expressions": [
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "b"
+                                      }
+                                    }
+                                  }
+                                },
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "Assigment": {
+                              "target": {
+                                "Reference": {
+                                  "name": "error_inst"
+                                }
+                              },
+                              "expression": {
+                                "Expression": {
+                                  "FunctionCall": {
+                                    "target": {
+                                      "Expression": {
+                                        "Reference": {
+                                          "target": "Object"
+                                        }
+                                      }
+                                    },
+                                    "arguments": [
+                                      {
+                                        "Expression": {
+                                          "Reference": {
+                                            "target": "error_type"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              },
+                              "flags": {
+                                "bits": 1
                               }
-                            },
-                            "expression": {
-                              "Expression": {
-                                "FunctionCall": {
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "Assigment": {
+                              "target": {
+                                "Field": {
                                   "target": {
                                     "Expression": {
                                       "Reference": {
-                                        "target": "Object"
+                                        "target": "error_inst"
                                       }
                                     }
                                   },
-                                  "arguments": [
-                                    {
+                                  "name": "message"
+                                }
+                              },
+                              "expression": {
+                                "Expression": {
+                                  "Literal": {
+                                    "value": {
+                                      "String": "Wow!"
+                                    }
+                                  }
+                                }
+                              },
+                              "flags": {
+                                "bits": 1
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "Yeet": {
+                              "value": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "error_inst"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                "filter_expr": {
+                  "Expression": {
+                    "Reference": {
+                      "target": "error_type"
+                    }
+                  }
+                },
+                "error_variable": "thrown",
+                "yoink_body": {
+                  "Expression": {
+                    "Joiner": {
+                      "expressions": [
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "Yoinking\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "FieldAccess": {
+                                      "target": {
+                                        "Expression": {
+                                          "Reference": {
+                                            "target": "thrown"
+                                          }
+                                        }
+                                      },
+                                      "name": "message"
+                                    }
+                                  }
+                                },
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "FieldAccess": {
+                                      "target": {
+                                        "Expression": {
+                                          "FieldAccess": {
+                                            "target": {
+                                              "Expression": {
+                                                "Reference": {
+                                                  "target": "thrown"
+                                                }
+                                              }
+                                            },
+                                            "name": "super"
+                                          }
+                                        }
+                                      },
+                                      "name": "message"
+                                    }
+                                  }
+                                },
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "Expression": {
+              "FunctionCall": {
+                "target": {
+                  "Expression": {
+                    "Reference": {
+                      "target": "print"
+                    }
+                  }
+                },
+                "arguments": [
+                  {
+                    "Expression": {
+                      "Literal": {
+                        "value": {
+                          "String": "Done!\n"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "Branch": {
+              "TryBlock": {
+                "try_body": {
+                  "Expression": {
+                    "Joiner": {
+                      "expressions": [
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "Throwing inside function\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "FieldAccess": {
+                                    "target": {
                                       "Expression": {
                                         "Reference": {
                                           "target": "error_type"
                                         }
                                       }
-                                    }
-                                  ]
+                                    },
+                                    "name": "testfn"
+                                  }
                                 }
-                              }
-                            },
-                            "flags": {
-                              "bits": 1
+                              },
+                              "arguments": []
                             }
                           }
                         }
-                      },
-                      {
-                        "Expression": {
-                          "Assigment": {
-                            "target": {
-                              "Field": {
-                                "target": {
+                      ]
+                    }
+                  }
+                },
+                "filter_expr": {
+                  "Expression": {
+                    "Reference": {
+                      "target": "error_type"
+                    }
+                  }
+                },
+                "error_variable": "test2",
+                "yoink_body": {
+                  "Expression": {
+                    "Joiner": {
+                      "expressions": [
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
                                   "Expression": {
-                                    "Reference": {
-                                      "target": "error_inst"
+                                    "Literal": {
+                                      "value": {
+                                        "String": "Caught\n"
+                                      }
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "Expression": {
+                            "FunctionCall": {
+                              "target": {
+                                "Expression": {
+                                  "Reference": {
+                                    "target": "print"
+                                  }
+                                }
+                              },
+                              "arguments": [
+                                {
+                                  "Expression": {
+                                    "FieldAccess": {
+                                      "target": {
+                                        "Expression": {
+                                          "Reference": {
+                                            "target": "test2"
+                                          }
+                                        }
+                                      },
+                                      "name": "message"
                                     }
                                   }
                                 },
-                                "name": "message"
-                              }
-                            },
-                            "expression": {
-                              "Expression": {
-                                "Literal": {
-                                  "value": {
-                                    "String": "Wow!"
+                                {
+                                  "Expression": {
+                                    "Literal": {
+                                      "value": {
+                                        "String": "\n"
+                                      }
+                                    }
                                   }
                                 }
-                              }
-                            },
-                            "flags": {
-                              "bits": 1
+                              ]
                             }
                           }
                         }
-                      },
-                      {
-                        "Expression": {
-                          "Yeet": {
-                            "value": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "error_inst"
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
-              },
-              "filter_expr": {
-                "Expression": {
-                  "Reference": {
-                    "target": "error_type"
-                  }
-                }
-              },
-              "error_variable": "thrown",
-              "yoink_body": {
-                "Expression": {
-                  "Joiner": {
-                    "expressions": [
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "Yoinking\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "FieldAccess": {
-                                    "target": {
-                                      "Expression": {
-                                        "Reference": {
-                                          "target": "thrown"
-                                        }
-                                      }
-                                    },
-                                    "name": "message"
-                                  }
-                                }
-                              },
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "FieldAccess": {
-                                    "target": {
-                                      "Expression": {
-                                        "FieldAccess": {
-                                          "target": {
-                                            "Expression": {
-                                              "Reference": {
-                                                "target": "thrown"
-                                              }
-                                            }
-                                          },
-                                          "name": "super"
-                                        }
-                                      }
-                                    },
-                                    "name": "message"
-                                  }
-                                }
-                              },
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ]
+                      ]
+                    }
                   }
                 }
               }
             }
-          }
-        },
-        {
-          "Expression": {
-            "FunctionCall": {
-              "target": {
-                "Expression": {
-                  "Reference": {
-                    "target": "print"
-                  }
-                }
-              },
-              "arguments": [
-                {
+          },
+          {
+            "Expression": {
+              "FunctionCall": {
+                "target": {
                   "Expression": {
-                    "Literal": {
-                      "value": {
-                        "String": "Done!\n"
+                    "Reference": {
+                      "target": "print"
+                    }
+                  }
+                },
+                "arguments": [
+                  {
+                    "Expression": {
+                      "Literal": {
+                        "value": {
+                          "String": "Done2!\n"
+                        }
                       }
                     }
                   }
-                }
-              ]
-            }
-          }
-        },
-        {
-          "Branch": {
-            "TryBlock": {
-              "try_body": {
-                "Expression": {
-                  "Joiner": {
-                    "expressions": [
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "Throwing inside function\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "FieldAccess": {
-                                  "target": {
-                                    "Expression": {
-                                      "Reference": {
-                                        "target": "error_type"
-                                      }
-                                    }
-                                  },
-                                  "name": "testfn"
-                                }
-                              }
-                            },
-                            "arguments": []
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
-              },
-              "filter_expr": {
-                "Expression": {
-                  "Reference": {
-                    "target": "error_type"
-                  }
-                }
-              },
-              "error_variable": "test2",
-              "yoink_body": {
-                "Expression": {
-                  "Joiner": {
-                    "expressions": [
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "Caught\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "Expression": {
-                          "FunctionCall": {
-                            "target": {
-                              "Expression": {
-                                "Reference": {
-                                  "target": "print"
-                                }
-                              }
-                            },
-                            "arguments": [
-                              {
-                                "Expression": {
-                                  "FieldAccess": {
-                                    "target": {
-                                      "Expression": {
-                                        "Reference": {
-                                          "target": "test2"
-                                        }
-                                      }
-                                    },
-                                    "name": "message"
-                                  }
-                                }
-                              },
-                              {
-                                "Expression": {
-                                  "Literal": {
-                                    "value": {
-                                      "String": "\n"
-                                    }
-                                  }
-                                }
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ]
-                  }
-                }
+                ]
               }
             }
-          }
-        },
-        {
-          "Expression": {
-            "FunctionCall": {
-              "target": {
-                "Expression": {
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
                   "Reference": {
-                    "target": "print"
+                    "name": "root"
                   }
-                }
-              },
-              "arguments": [
-                {
+                },
+                "expression": {
                   "Expression": {
-                    "Literal": {
-                      "value": {
-                        "String": "Done2!\n"
-                      }
+                    "FunctionCall": {
+                      "target": {
+                        "Expression": {
+                          "Reference": {
+                            "target": "Object"
+                          }
+                        }
+                      },
+                      "arguments": []
                     }
                   }
+                },
+                "flags": {
+                  "bits": 1
                 }
-              ]
-            }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Reference": {
-                  "name": "root"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionCall": {
-                    "target": {
-                      "Expression": {
-                        "Reference": {
-                          "target": "Object"
-                        }
-                      }
-                    },
-                    "arguments": []
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
               }
             }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Field": {
-                  "target": {
-                    "Expression": {
-                      "Reference": {
-                        "target": "root"
-                      }
-                    }
-                  },
-                  "name": "a"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionDeclaration": {
-                    "binds": [
-                      "root"
-                    ],
-                    "params": [
-                      "num"
-                    ],
-                    "body": {
-                      "Expression": {
-                        "Joiner": {
-                          "expressions": [
-                            {
-                              "Branch": {
-                                "IfElseBlock": {
-                                  "conditions": [
-                                    {
-                                      "condition": {
-                                        "Expression": {
-                                          "Compare": {
-                                            "lhs": {
-                                              "Expression": {
-                                                "Reference": {
-                                                  "target": "num"
-                                                }
-                                              }
-                                            },
-                                            "rhs": {
-                                              "Expression": {
-                                                "Literal": {
-                                                  "value": {
-                                                    "Integer": 10
-                                                  }
-                                                }
-                                              }
-                                            },
-                                            "operation": "Greater"
-                                          }
-                                        }
-                                      },
-                                      "body": {
-                                        "Expression": {
-                                          "Joiner": {
-                                            "expressions": [
-                                              {
-                                                "Expression": {
-                                                  "Yeet": {
-                                                    "value": {
-                                                      "Expression": {
-                                                        "Reference": {
-                                                          "target": "root"
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            ]
-                                          }
-                                        }
-                                      }
-                                    },
-                                    {
-                                      "condition": {
-                                        "Expression": {
-                                          "Compare": {
-                                            "lhs": {
-                                              "Expression": {
-                                                "Modulus": {
-                                                  "lhs": {
-                                                    "Expression": {
-                                                      "Reference": {
-                                                        "target": "num"
-                                                      }
-                                                    }
-                                                  },
-                                                  "rhs": {
-                                                    "Expression": {
-                                                      "Literal": {
-                                                        "value": {
-                                                          "Integer": 2
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                }
-                                              }
-                                            },
-                                            "rhs": {
-                                              "Expression": {
-                                                "Literal": {
-                                                  "value": {
-                                                    "Integer": 0
-                                                  }
-                                                }
-                                              }
-                                            },
-                                            "operation": "Equal"
-                                          }
-                                        }
-                                      },
-                                      "body": {
-                                        "Expression": {
-                                          "Joiner": {
-                                            "expressions": [
-                                              {
-                                                "Expression": {
-                                                  "FunctionCall": {
-                                                    "target": {
-                                                      "Expression": {
-                                                        "FieldAccess": {
-                                                          "target": {
-                                                            "Expression": {
-                                                              "Reference": {
-                                                                "target": "root"
-                                                              }
-                                                            }
-                                                          },
-                                                          "name": "b"
-                                                        }
-                                                      }
-                                                    },
-                                                    "arguments": [
-                                                      {
-                                                        "Expression": {
-                                                          "Addition": {
-                                                            "lhs": {
-                                                              "Expression": {
-                                                                "Reference": {
-                                                                  "target": "num"
-                                                                }
-                                                              }
-                                                            },
-                                                            "rhs": {
-                                                              "Expression": {
-                                                                "Literal": {
-                                                                  "value": {
-                                                                    "Integer": 1
-                                                                  }
-                                                                }
-                                                              }
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    ]
-                                                  }
-                                                }
-                                              }
-                                            ]
-                                          }
-                                        }
-                                      }
-                                    }
-                                  ],
-                                  "last": {
-                                    "Expression": {
-                                      "Joiner": {
-                                        "expressions": [
-                                          {
-                                            "Expression": {
-                                              "FunctionCall": {
-                                                "target": {
-                                                  "Expression": {
-                                                    "FieldAccess": {
-                                                      "target": {
-                                                        "Expression": {
-                                                          "Reference": {
-                                                            "target": "root"
-                                                          }
-                                                        }
-                                                      },
-                                                      "name": "c"
-                                                    }
-                                                  }
-                                                },
-                                                "arguments": [
-                                                  {
-                                                    "Expression": {
-                                                      "Addition": {
-                                                        "lhs": {
-                                                          "Expression": {
-                                                            "Reference": {
-                                                              "target": "num"
-                                                            }
-                                                          }
-                                                        },
-                                                        "rhs": {
-                                                          "Expression": {
-                                                            "Literal": {
-                                                              "value": {
-                                                                "Integer": 1
-                                                              }
-                                                            }
-                                                          }
-                                                        }
-                                                      }
-                                                    }
-                                                  }
-                                                ]
-                                              }
-                                            }
-                                          }
-                                        ]
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Field": {
-                  "target": {
-                    "Expression": {
-                      "Reference": {
-                        "target": "root"
-                      }
-                    }
-                  },
-                  "name": "b"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionDeclaration": {
-                    "binds": [
-                      "root"
-                    ],
-                    "params": [
-                      "num"
-                    ],
-                    "body": {
-                      "Expression": {
-                        "Joiner": {
-                          "expressions": [
-                            {
-                              "Expression": {
-                                "FunctionCall": {
-                                  "target": {
-                                    "Expression": {
-                                      "FieldAccess": {
-                                        "target": {
-                                          "Expression": {
-                                            "Reference": {
-                                              "target": "root"
-                                            }
-                                          }
-                                        },
-                                        "name": "a"
-                                      }
-                                    }
-                                  },
-                                  "arguments": [
-                                    {
-                                      "Expression": {
-                                        "Reference": {
-                                          "target": "num"
-                                        }
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "Assigment": {
-              "target": {
-                "Field": {
-                  "target": {
-                    "Expression": {
-                      "Reference": {
-                        "target": "root"
-                      }
-                    }
-                  },
-                  "name": "c"
-                }
-              },
-              "expression": {
-                "Expression": {
-                  "FunctionDeclaration": {
-                    "binds": [
-                      "root"
-                    ],
-                    "params": [
-                      "num"
-                    ],
-                    "body": {
-                      "Expression": {
-                        "Joiner": {
-                          "expressions": [
-                            {
-                              "Expression": {
-                                "FunctionCall": {
-                                  "target": {
-                                    "Expression": {
-                                      "FieldAccess": {
-                                        "target": {
-                                          "Expression": {
-                                            "Reference": {
-                                              "target": "root"
-                                            }
-                                          }
-                                        },
-                                        "name": "a"
-                                      }
-                                    }
-                                  },
-                                  "arguments": [
-                                    {
-                                      "Expression": {
-                                        "Reference": {
-                                          "target": "num"
-                                        }
-                                      }
-                                    }
-                                  ]
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "flags": {
-                "bits": 1
-              }
-            }
-          }
-        },
-        {
-          "Expression": {
-            "FunctionCall": {
-              "target": {
-                "Expression": {
-                  "FieldAccess": {
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Field": {
                     "target": {
                       "Expression": {
                         "Reference": {
@@ -1064,23 +685,405 @@
                     },
                     "name": "a"
                   }
-                }
-              },
-              "arguments": [
-                {
+                },
+                "expression": {
                   "Expression": {
-                    "Literal": {
-                      "value": {
-                        "Integer": 0
+                    "FunctionDeclaration": {
+                      "binds": [
+                        "root"
+                      ],
+                      "params": [
+                        "num"
+                      ],
+                      "body": {
+                        "Expression": {
+                          "Joiner": {
+                            "expressions": [
+                              {
+                                "Branch": {
+                                  "IfElseBlock": {
+                                    "conditions": [
+                                      {
+                                        "condition": {
+                                          "Expression": {
+                                            "Compare": {
+                                              "lhs": {
+                                                "Expression": {
+                                                  "Reference": {
+                                                    "target": "num"
+                                                  }
+                                                }
+                                              },
+                                              "rhs": {
+                                                "Expression": {
+                                                  "Literal": {
+                                                    "value": {
+                                                      "Integer": 10
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "operation": "Greater"
+                                            }
+                                          }
+                                        },
+                                        "body": {
+                                          "Expression": {
+                                            "Joiner": {
+                                              "expressions": [
+                                                {
+                                                  "Expression": {
+                                                    "Yeet": {
+                                                      "value": {
+                                                        "Expression": {
+                                                          "Reference": {
+                                                            "target": "root"
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "condition": {
+                                          "Expression": {
+                                            "Compare": {
+                                              "lhs": {
+                                                "Expression": {
+                                                  "Modulus": {
+                                                    "lhs": {
+                                                      "Expression": {
+                                                        "Reference": {
+                                                          "target": "num"
+                                                        }
+                                                      }
+                                                    },
+                                                    "rhs": {
+                                                      "Expression": {
+                                                        "Literal": {
+                                                          "value": {
+                                                            "Integer": 2
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "rhs": {
+                                                "Expression": {
+                                                  "Literal": {
+                                                    "value": {
+                                                      "Integer": 0
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              "operation": "Equal"
+                                            }
+                                          }
+                                        },
+                                        "body": {
+                                          "Expression": {
+                                            "Joiner": {
+                                              "expressions": [
+                                                {
+                                                  "Expression": {
+                                                    "FunctionCall": {
+                                                      "target": {
+                                                        "Expression": {
+                                                          "FieldAccess": {
+                                                            "target": {
+                                                              "Expression": {
+                                                                "Reference": {
+                                                                  "target": "root"
+                                                                }
+                                                              }
+                                                            },
+                                                            "name": "b"
+                                                          }
+                                                        }
+                                                      },
+                                                      "arguments": [
+                                                        {
+                                                          "Expression": {
+                                                            "Addition": {
+                                                              "lhs": {
+                                                                "Expression": {
+                                                                  "Reference": {
+                                                                    "target": "num"
+                                                                  }
+                                                                }
+                                                              },
+                                                              "rhs": {
+                                                                "Expression": {
+                                                                  "Literal": {
+                                                                    "value": {
+                                                                      "Integer": 1
+                                                                    }
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      ]
+                                                    }
+                                                  }
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "last": {
+                                      "Expression": {
+                                        "Joiner": {
+                                          "expressions": [
+                                            {
+                                              "Expression": {
+                                                "FunctionCall": {
+                                                  "target": {
+                                                    "Expression": {
+                                                      "FieldAccess": {
+                                                        "target": {
+                                                          "Expression": {
+                                                            "Reference": {
+                                                              "target": "root"
+                                                            }
+                                                          }
+                                                        },
+                                                        "name": "c"
+                                                      }
+                                                    }
+                                                  },
+                                                  "arguments": [
+                                                    {
+                                                      "Expression": {
+                                                        "Addition": {
+                                                          "lhs": {
+                                                            "Expression": {
+                                                              "Reference": {
+                                                                "target": "num"
+                                                              }
+                                                            }
+                                                          },
+                                                          "rhs": {
+                                                            "Expression": {
+                                                              "Literal": {
+                                                                "value": {
+                                                                  "Integer": 1
+                                                                }
+                                                              }
+                                                            }
+                                                          }
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
                       }
                     }
                   }
+                },
+                "flags": {
+                  "bits": 1
                 }
-              ]
+              }
+            }
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Field": {
+                    "target": {
+                      "Expression": {
+                        "Reference": {
+                          "target": "root"
+                        }
+                      }
+                    },
+                    "name": "b"
+                  }
+                },
+                "expression": {
+                  "Expression": {
+                    "FunctionDeclaration": {
+                      "binds": [
+                        "root"
+                      ],
+                      "params": [
+                        "num"
+                      ],
+                      "body": {
+                        "Expression": {
+                          "Joiner": {
+                            "expressions": [
+                              {
+                                "Expression": {
+                                  "FunctionCall": {
+                                    "target": {
+                                      "Expression": {
+                                        "FieldAccess": {
+                                          "target": {
+                                            "Expression": {
+                                              "Reference": {
+                                                "target": "root"
+                                              }
+                                            }
+                                          },
+                                          "name": "a"
+                                        }
+                                      }
+                                    },
+                                    "arguments": [
+                                      {
+                                        "Expression": {
+                                          "Reference": {
+                                            "target": "num"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "flags": {
+                  "bits": 1
+                }
+              }
+            }
+          },
+          {
+            "Expression": {
+              "Assigment": {
+                "target": {
+                  "Field": {
+                    "target": {
+                      "Expression": {
+                        "Reference": {
+                          "target": "root"
+                        }
+                      }
+                    },
+                    "name": "c"
+                  }
+                },
+                "expression": {
+                  "Expression": {
+                    "FunctionDeclaration": {
+                      "binds": [
+                        "root"
+                      ],
+                      "params": [
+                        "num"
+                      ],
+                      "body": {
+                        "Expression": {
+                          "Joiner": {
+                            "expressions": [
+                              {
+                                "Expression": {
+                                  "FunctionCall": {
+                                    "target": {
+                                      "Expression": {
+                                        "FieldAccess": {
+                                          "target": {
+                                            "Expression": {
+                                              "Reference": {
+                                                "target": "root"
+                                              }
+                                            }
+                                          },
+                                          "name": "a"
+                                        }
+                                      }
+                                    },
+                                    "arguments": [
+                                      {
+                                        "Expression": {
+                                          "Reference": {
+                                            "target": "num"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "flags": {
+                  "bits": 1
+                }
+              }
+            }
+          },
+          {
+            "Expression": {
+              "FunctionCall": {
+                "target": {
+                  "Expression": {
+                    "FieldAccess": {
+                      "target": {
+                        "Expression": {
+                          "Reference": {
+                            "target": "root"
+                          }
+                        }
+                      },
+                      "name": "a"
+                    }
+                  }
+                },
+                "arguments": [
+                  {
+                    "Expression": {
+                      "Literal": {
+                        "value": {
+                          "Integer": 0
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
             }
           }
-        }
-      ]
+        ]
+      }
     }
-  }
+  },
+  "imports": []
 }

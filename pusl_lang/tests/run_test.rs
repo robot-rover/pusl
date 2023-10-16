@@ -9,8 +9,8 @@ use std::path::PathBuf;
 
 const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 
-fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
-    assert_eq!(path.to_str().unwrap(), "secondary_source");
+fn test_resolve(path: Vec<String>) -> Option<ByteCodeFile> {
+    assert_eq!(path.join("/"), "secondary_source");
     let lines = SECOND_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);

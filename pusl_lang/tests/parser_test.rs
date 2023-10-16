@@ -12,14 +12,14 @@ fn parse_small_test() {
     let roots = lex(lines);
     let ast = parse(roots);
 
-    compare_test_eq(&ast.expr, "parse", "small");
+    compare_test_eq(&ast, "parse", "small");
 }
 
 #[test]
-fn error_test() {
+fn parse_error_test() {
     let lines = include_str!("../../resources/errors.pusl").lines();
     let roots = lex(lines);
     let ast = parse(roots);
 
-    compare_test_eq(&ast.expr, "parse", "error");
+    compare_test_eq(&ast, "parse", "error");
 }

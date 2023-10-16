@@ -243,6 +243,7 @@ union ByteCode {
 pub struct ByteCodeArray(Vec<ByteCode>);
 
 impl ByteCodeArray {
+    // TODO: For safety, only accept a wrapper around usize as an offset
     pub fn new() -> Self {
         ByteCodeArray(Vec::new())
     }

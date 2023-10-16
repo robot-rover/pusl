@@ -587,7 +587,9 @@
   },
   "imports": [
     {
-      "path": "secondary_source",
+      "path": [
+        "secondary_source"
+      ],
       "alias": "ss"
     }
   ]

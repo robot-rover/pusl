@@ -1,8 +1,7 @@
-use std::{cell::RefCell, collections::HashMap, env, mem, io::{self, stdout}, borrow::Cow};
+use std::{cell::RefCell, collections::HashMap, env, mem, io, ffi::OsStr};
 
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
-use supercow::Supercow;
 
 use crate::backend::linearize::{ByteCodeFile, ErrorCatch};
 use crate::backend::object::{is_instance_of, FnPtr, Object, ObjectPtr, PuslObject, Value};
@@ -119,7 +118,7 @@ impl StackFrame {
 }
 
 pub struct ExecContext<'a> {
-    pub resolve: fn(PathBuf) -> Option<ByteCodeFile>,
+    pub resolve: fn(Vec<String>) -> Option<ByteCodeFile>,
     pub stream: Option<&'a mut dyn io::Write>,
 }
 
@@ -131,10 +130,10 @@ impl<'a> Default for ExecContext<'a> {
 
 fn process_bcf(
     bcf: ByteCodeFile,
-    path: PathBuf,
-    resolved_imports: &Vec<(PathBuf, ObjectPtr)>,
+    path: Vec<String>,
+    resolved_imports: &Vec<(Vec<String>, ObjectPtr)>,
     gc: &mut ManagedPool,
-) -> (StackFrame, (PathBuf, ObjectPtr)) {
+) -> (StackFrame, (Vec<String>, ObjectPtr)) {
     let ByteCodeFile { base_func, imports } = bcf;
     let rfunc = base_func.resolve(resolved_imports, imports, gc);
     let bfunc = rfunc.bind(Vec::new(), gc);
@@ -143,10 +142,10 @@ fn process_bcf(
 }
 
 pub struct ExecutionState<'a> {
-    imports: Vec<(PathBuf, ObjectPtr)>,
+    imports: Vec<(Vec<String>, ObjectPtr)>,
     execution_stack: Vec<StackFrame>,
     current_frame: StackFrame,
-    resolve_stack: Vec<(PathBuf, ByteCodeFile)>,
+    resolve_stack: Vec<(Vec<String>, ByteCodeFile)>,
     gc: ManagedPool,
     builtins: HashMap<&'static str, Value>,
     builtin_data: AnyMap,
@@ -176,8 +175,9 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
     let ExecContext { resolve, stream } = ctx;
-    let mut resolved_imports = Vec::<(PathBuf, ObjectPtr)>::new();
-    let mut resolve_stack = vec![(main_path, main)];
+    let mut resolved_imports = Vec::<(Vec<String>, ObjectPtr)>::new();
+    // TODO: This shouldn't use a path buf at this point
+    let mut resolve_stack = vec![(main_path.into_iter().map(OsStr::to_str).map(Option::unwrap).map(str::to_string).collect(), main)];
     let mut index = 0;
     // TODO: Don't clone here
     while index < resolve_stack.len() {
@@ -188,7 +188,7 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
                 .any(|(path, _bcf)| path == &import.path)
             {
                 let new_bcf = resolve(import.path.clone()).unwrap_or_else(|| {
-                    panic!("Unable to resolve import {}", import.path.display())
+                    panic!("Unable to resolve import {:?}", import.path)
                 });
                 append.push((import.path.clone(), new_bcf));
             }

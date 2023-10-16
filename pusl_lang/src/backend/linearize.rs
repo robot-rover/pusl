@@ -42,9 +42,9 @@ impl Debug for ByteCodeFile {
             for (index, import) in self.imports.iter().enumerate() {
                 writeln!(
                     f,
-                    "\t{:3}; {} as {}",
+                    "\t{:3}; {:?} as {}",
                     index,
-                    import.path.display(),
+                    import.path,
                     import.alias
                 )?;
             }
@@ -107,6 +107,7 @@ pub struct ErrorCatch {
     pub begin: usize,
     pub filter: usize,
     pub yoink: usize,
+    // TODO: why isn't this a pool reference too
     pub variable_name: String,
 }
 
@@ -163,7 +164,7 @@ impl BasicFunction {
         gc: &mut ManagedPool,
     ) -> &'static ResolvedFunction
     where
-        I: IntoIterator<Item = &'a (PathBuf, ObjectPtr)>,
+        I: IntoIterator<Item = &'a (Vec<String>, ObjectPtr)>,
     {
         let BasicFunction {
             function,
