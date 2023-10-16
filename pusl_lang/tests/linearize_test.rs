@@ -65,13 +65,15 @@ fn check_function_equal(expect: &Function, actual: &Function, context: &str) {
 }
 
 fn check_basic_function_equal(expect: &BasicFunction, actual: &BasicFunction, context: &str) {
+    let ex_function = expect.as_ref();
     let BasicFunction {
-        function: ex_function,
         sub_functions: ex_sub_functions,
+        ..
     } = expect;
+    let ac_function = actual.as_ref();
     let BasicFunction {
-        function: ac_function,
         sub_functions: ac_sub_functions,
+        ..
     } = actual;
 
     check_function_equal(ex_function, ac_function, context);

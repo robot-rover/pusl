@@ -56,7 +56,7 @@ impl Debug for ByteCodeFile {
 
 #[derive(Clone)]
 pub struct ResolvedFunction {
-    pub function: Function,
+    function: Function,
     pub imports: &'static Vec<(String, ObjectPtr)>,
     pub sub_functions: Vec<ResolvedFunction>,
 }
@@ -102,6 +102,12 @@ impl ResolvedFunction {
     }
 }
 
+impl AsRef<Function> for ResolvedFunction {
+    fn as_ref(&self) -> &Function {
+        &self.function
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ErrorCatch {
     pub begin: usize,
@@ -124,8 +130,14 @@ pub struct Function {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BasicFunction {
-    pub function: Function,
+    function: Function,
     pub sub_functions: Vec<BasicFunction>,
+}
+
+impl AsRef<Function> for BasicFunction {
+    fn as_ref(&self) -> &Function {
+        &self.function
+    }
 }
 
 impl Debug for BasicFunction {

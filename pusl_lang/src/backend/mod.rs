@@ -52,7 +52,7 @@ impl Debug for BoundFunction {
             write!(f, "\nBindings:")?;
             for (name, binding) in self
                 .target
-                .function
+                .as_ref()
                 .binds
                 .iter()
                 .zip(self.bound_values.iter())
@@ -111,7 +111,7 @@ impl StackFrame {
     }
 
     pub fn get_code(&mut self) -> Option<OpCode> {
-        let code = self.bfunc.target.function.code.get(self.index);
+        let code = self.bfunc.target.as_ref().code.get(self.index);
         code.as_ref().map(|(_, new_offset)| self.index = *new_offset);
         code.map(|(code, _)| code)
     }
@@ -159,11 +159,11 @@ impl<'a> Debug for ExecutionState<'a> {
             .current_frame
             .bfunc
             .target
-            .function
+            .as_ref()
             .code
             .get(self.current_frame.index);
         if let Some(current_op) = current_op {
-            current_op.0.format_opcode(self.current_frame.index, f, &self.current_frame.bfunc.target.function)
+            current_op.0.format_opcode(self.current_frame.index, f, &self.current_frame.bfunc.target.as_ref())
         } else {
             writeln!(f, "out of bounds")
         }
@@ -305,7 +305,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_literal(pool_index);
                     let value = literal.into_value(&mut state.gc);
                     state.current_frame.op_stack.push(value);
@@ -331,7 +331,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_reference(pool_index);
                     let value = state
                         .current_frame
@@ -352,7 +352,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                                 .current_frame
                                 .bfunc
                                 .target
-                                .function
+                                .as_ref()
                                 .binds
                                 .iter()
                                 .position(|name| name == &reference_name)
@@ -377,7 +377,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                 OpCode::PushFunction(pool_index) => {
                     let rfunc = state.current_frame.bfunc.target.get_function(pool_index);
                     let bound_values = rfunc
-                        .function
+                        .as_ref()
                         .binds
                         .iter()
                         .map(|name| {
@@ -410,13 +410,13 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                     let function = state.current_frame.op_stack.pop().unwrap();
                     match function {
                         Value::Function((FunctionTarget::Pusl(reference), this)) => {
-                            assert_eq!(reference.target.function.args.len(), args.len());
+                            assert_eq!(reference.target.as_ref().args.len(), args.len());
                             let arg_value_iter = args.into_iter();
                             let mut new_frame = StackFrame::from_function(reference, this);
                             for (name, value) in new_frame
                                 .bfunc
                                 .target
-                                .function
+                                .as_ref()
                                 .args
                                 .iter()
                                 .cloned()
@@ -426,7 +426,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                                     .variables
                                     .push(VariableStack::Variable(Variable { value, name }));
                             }
-                            if new_frame.bfunc.target.function.is_generator {
+                            if new_frame.bfunc.target.as_ref().is_generator {
                                 let result = generator::new_generator(new_frame, &mut state);
                                 state.current_frame.op_stack.push(result);
                             } else {
@@ -452,7 +452,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_reference(name_index);
                     let value = match value {
                         Value::Object(object) => {
@@ -592,7 +592,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_reference(pool_index);
                     let value = state.current_frame.op_stack.pop().unwrap();
                     if is_let {
@@ -632,7 +632,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_reference(pool_index);
                     let value = state.current_frame.op_stack.pop().unwrap();
                     let object = match state.current_frame.op_stack.pop().unwrap() {
@@ -661,7 +661,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                         .current_frame
                         .bfunc
                         .target
-                        .function
+                        .as_ref()
                         .get_reference(pool_index);
                     let builtin = state
                         .builtins
@@ -681,7 +681,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                     state.current_frame.op_stack.push(value);
                 }
                 OpCode::Yield => {
-                    assert!(state.current_frame.bfunc.target.function.is_generator);
+                    assert!(state.current_frame.bfunc.target.as_ref().is_generator);
                     let result = state.current_frame.op_stack.pop().unwrap();
                     return Yield(result);
                 }
@@ -712,7 +712,7 @@ fn unwind_stack(
     error: ObjectPtr,
 ) -> Result<(ObjectPtr, ErrorCatch), Value> {
     loop {
-        for catch in &state.current_frame.bfunc.target.function.catches {
+        for catch in &state.current_frame.bfunc.target.as_ref().catches {
             if catch.begin <= current_idx && catch.filter > current_idx {
                 state.current_frame.index = catch.filter;
                 return Ok((error, catch.clone()));
