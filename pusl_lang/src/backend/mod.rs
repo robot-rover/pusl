@@ -64,6 +64,7 @@ impl Debug for BoundFunction {
     }
 }
 
+// TODO: implement scopes better
 #[derive(Debug)]
 enum VariableStack {
     Variable(Variable),

@@ -158,7 +158,7 @@ fn main() -> io::Result<()> {
             if matches.is_present("analyze") {
                 println!("{:#?}", bcf.base_func);
             } else {
-                let ctx = ExecContext { resolve: |_| None };
+                let ctx = ExecContext::default();
                 startup(bcf, path, ctx);
             }
         }
@@ -166,7 +166,7 @@ fn main() -> io::Result<()> {
             let path = PathBuf::from(matches.value_of("SOURCE").unwrap());
 
             let bcf = compile_from_source_path(&path, verbosity)?;
-            let ctx = ExecContext { resolve: |_| None };
+            let ctx = ExecContext::default();
             startup(bcf, path, ctx);
         }
         _ => println!("{}", matches.usage()),

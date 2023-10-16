@@ -1,0 +1,13 @@
+print("Hello World\n")
+
+print("Self:", self, "\n")
+print("This:", this, "\n")
+
+let test = fn(a):
+    print(a)
+    if a > 1:
+        self(a-1)
+
+test(10)
+
+return "Success"
