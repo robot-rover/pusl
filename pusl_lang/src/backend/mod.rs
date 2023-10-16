@@ -110,8 +110,8 @@ impl StackFrame {
 
     pub fn get_code(&mut self) -> Option<OpCode> {
         let code = self.bfunc.target.function.get_code(self.index);
-        self.index += 1;
-        code
+        code.as_ref().map(|(_, new_offset)| self.index = *new_offset);
+        code.map(|(code, _)| code)
     }
 
     pub fn get_val(&mut self) -> usize {
@@ -177,19 +177,10 @@ impl<'a> Debug for ExecutionState<'a> {
             .bfunc
             .target
             .function
-            .get_code(self.current_frame.index - 1)
+            .code
+            .get_offset(self.current_frame.index - 1)
             .unwrap();
-        linearize::write_bytecode_line(
-            (
-                self.current_frame.index,
-                &linearize::ByteCode::op(current_op),
-            ),
-            f,
-            &mut (&self.current_frame.bfunc.target.function.code.0[self.current_frame.index..])
-                .iter()
-                .enumerate(),
-            &self.current_frame.bfunc.target.function,
-        )
+        current_op.0.format_opcode(self.current_frame.index - 1, f, &self.current_frame.bfunc.target.function)
     }
 }
 
@@ -277,8 +268,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     let lhs = state.current_frame.op_stack.pop().unwrap();
                     state.current_frame.op_stack.push(modulus(lhs, rhs));
                 }
-                OpCode::Literal => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::Literal(pool_index) => {
                     let literal = state
                         .current_frame
                         .bfunc
@@ -304,8 +294,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         .op_stack
                         .push(Value::Function((FunctionTarget::Pusl(self_ref), this_ref)));
                 }
-                OpCode::PushReference => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::PushReference(pool_index) => {
                     let reference_name = state
                         .current_frame
                         .bfunc
@@ -353,8 +342,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         });
                     state.current_frame.op_stack.push(value);
                 }
-                OpCode::PushFunction => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::PushFunction(pool_index) => {
                     let rfunc = state.current_frame.bfunc.target.get_function(pool_index);
                     let bound_values = rfunc
                         .function
@@ -383,8 +371,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
 
                     state.current_frame.op_stack.push(Value::pusl_fn(bfunc));
                 }
-                OpCode::FunctionCall => {
-                    let num_args = state.current_frame.get_val();
+                OpCode::FunctionCall(num_args) => {
                     assert!(state.current_frame.op_stack.len() >= num_args);
                     let split_off_index = state.current_frame.op_stack.len() - num_args;
                     let args = state.current_frame.op_stack.split_off(split_off_index);
@@ -427,9 +414,8 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         _ => panic!("Value must be a function to call"),
                     };
                 }
-                OpCode::FieldAccess => {
+                OpCode::FieldAccess(name_index) => {
                     let value = state.current_frame.op_stack.pop().unwrap();
-                    let name_index = state.current_frame.get_val();
                     let name = state
                         .current_frame
                         .bfunc
@@ -488,8 +474,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     let lhs = state.current_frame.op_stack.pop().unwrap();
                     state.current_frame.op_stack.push(exponent(lhs, rhs));
                 }
-                OpCode::Compare => {
-                    let op = state.current_frame.get_cmp();
+                OpCode::Compare(op) => {
                     let rhs = state.current_frame.op_stack.pop().unwrap();
                     let lhs = state.current_frame.op_stack.pop().unwrap();
                     state.current_frame.op_stack.push(compare(lhs, rhs, op));
@@ -533,8 +518,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         return (return_value, false);
                     }
                 }
-                OpCode::ConditionalJump => {
-                    let jump_index = state.current_frame.get_val();
+                OpCode::ConditionalJump(jump_index) => {
                     let condition =
                         if let Value::Boolean(val) = state.current_frame.op_stack.pop().unwrap() {
                             val
@@ -545,10 +529,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         state.current_frame.index = jump_index;
                     }
                 }
-                OpCode::ComparisonJump => {
-                    let greater_index = state.current_frame.get_val();
-                    let less_index = state.current_frame.get_val();
-                    let equal_index = state.current_frame.get_val();
+                OpCode::ComparisonJump(greater_index, less_index, equal_index) => {
                     let rhs = state.current_frame.op_stack.pop().unwrap();
                     let lhs = state.current_frame.op_stack.pop().unwrap();
                     let ordering = compare_numerical(lhs, rhs);
@@ -559,8 +540,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     };
                     state.current_frame.index = index;
                 }
-                OpCode::Jump => {
-                    let jump_index = state.current_frame.get_val();
+                OpCode::Jump(jump_index) => {
                     state.current_frame.index = jump_index;
                 }
                 OpCode::Pop => {
@@ -575,15 +555,13 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                     let value = (*state.current_frame.op_stack.last().unwrap()).clone();
                     state.current_frame.op_stack.push(value);
                 }
-                OpCode::AssignReference => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::AssignReference(pool_index, is_let) => {
                     let reference_name = state
                         .current_frame
                         .bfunc
                         .target
                         .function
                         .get_reference(pool_index);
-                    let is_let = state.current_frame.get_assign_type();
                     let value = state.current_frame.op_stack.pop().unwrap();
                     if is_let {
                         state
@@ -617,15 +595,13 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         variable.value = value;
                     }
                 }
-                OpCode::AssignField => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::AssignField(pool_index, is_let) => {
                     let reference_name = state
                         .current_frame
                         .bfunc
                         .target
                         .function
                         .get_reference(pool_index);
-                    let is_let = state.current_frame.get_assign_type();
                     let value = state.current_frame.op_stack.pop().unwrap();
                     let object = match state.current_frame.op_stack.pop().unwrap() {
                         Value::Object(ptr) => ptr,
@@ -642,15 +618,13 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                             .assign_field(reference_name.as_str(), value, false);
                     }
                 }
-                OpCode::DuplicateMany => {
-                    let n = state.current_frame.get_val();
+                OpCode::DuplicateMany(n) => {
                     let len = state.current_frame.op_stack.len();
                     assert!(n <= len);
                     let mut range = state.current_frame.op_stack[(len - n)..len].to_vec();
                     state.current_frame.op_stack.append(&mut range);
                 }
-                OpCode::PushBuiltin => {
-                    let pool_index = state.current_frame.get_val();
+                OpCode::PushBuiltin(pool_index) => {
                     let reference_name = state
                         .current_frame
                         .bfunc
@@ -664,8 +638,7 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> (Value, bool) {
                         .clone();
                     state.current_frame.op_stack.push(builtin);
                 }
-                OpCode::DuplicateDeep => {
-                    let dup_index = state.current_frame.get_val();
+                OpCode::DuplicateDeep(dup_index) => {
                     let stack_index = state.current_frame.op_stack.len() - 1 - dup_index;
                     let value = state
                         .current_frame

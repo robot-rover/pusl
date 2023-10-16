@@ -6,7 +6,10 @@ extern crate shrust;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use clap::{App, Arg, SubCommand};
-use pusl_lang::backend::{linearize::{linearize_file, ByteCodeFile}, ExecContext, startup};
+use pusl_lang::backend::{
+    linearize::{linearize_file, ByteCodeFile},
+    startup, ExecContext,
+};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::fs::File;

@@ -1,8 +1,8 @@
 use crate::backend::object::Value;
 use garbage::ManagedPool;
 use serde::{Deserialize, Serialize};
-use std::fmt::{Debug, Formatter};
 use std::fmt;
+use std::fmt::{Debug, Formatter};
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum Literal {

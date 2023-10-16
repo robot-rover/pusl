@@ -15,5 +15,4 @@ fn lex_small_test() {
         }
         assert_eq!(expected.len(), actual.len());
     });
-
 }

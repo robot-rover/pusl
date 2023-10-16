@@ -21,7 +21,7 @@ fn test_resolve(path: PathBuf) -> Option<ByteCodeFile> {
 const GENERATOR_SOURCE: &'static str = include_str!("../../resources/generator.pusl");
 
 #[test]
-fn generator_test() {
+fn run_generator_test() {
     let lines = GENERATOR_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
@@ -31,7 +31,7 @@ fn generator_test() {
 }
 
 #[test]
-fn small_test() {
+fn run_small_test() {
     let lines = SMALL_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
@@ -45,7 +45,7 @@ fn small_test() {
 const FIBB_SOURCE: &'static str = include_str!("../../resources/fibb.pusl");
 
 #[test]
-fn fibb_test() {
+fn run_fibb_test() {
     let lines = FIBB_SOURCE.lines();
     let roots = lex(lines);
     let ast = parse(roots);
