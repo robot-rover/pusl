@@ -541,10 +541,6 @@ impl ByteCode {
         }
     }
 
-    fn zero() -> Self {
-        ByteCode { value: 0 }
-    }
-
     fn as_op(self) -> OpCodeTag {
         unsafe { self.op_code }
     }

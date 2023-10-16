@@ -4,19 +4,16 @@ use crate::backend::BoundFunction;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
-use crate::parser::expression::{Compare, Expression};
+use crate::parser::expression::{Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
-use core::num;
+
 use garbage::ManagedPool;
 use pad_adapter::PadAdapter;
-use serde::{
-    de::{Error, Visitor},
-    ser::{self, SerializeSeq},
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::fmt::{Debug, Formatter};
-use std::path::PathBuf;
+
 use std::{env, fmt};
 
 use super::opcode::{ByteCodeArray, OpCode};

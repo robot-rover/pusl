@@ -49,6 +49,7 @@ A function that has sub functions (which are themselves basic functions)
 A list native object (implemented on top of a vec)
 
 `struct ListBuiltin {`
+Static data stored for the list object
 
 ## src/backend/opcode.rs
 `pub struct ByteCodeArray(Vec<ByteCode>);`
@@ -68,3 +69,4 @@ the Generator native object
 The sentinel object for generator iteration
 
 `struct GeneratorBuiltin {`
+Static data stored for the generator object
