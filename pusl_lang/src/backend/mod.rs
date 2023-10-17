@@ -237,6 +237,9 @@ enum ExecuteReturn {
 }
 
 fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
+    let pusl_trace = env::var("PUSL_TRACE").is_ok();
+    let pusl_trace_var = env::var("PUSL_TRACE_VAR").is_ok();
+
     loop {
     let native_fn_call: (NativeFn, Vec<Value>, Option<Value>);
     loop {
@@ -244,10 +247,10 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
         {
             let current_idx = state.current_frame.index;
 
-            if env::var("PUSL_TRACE").is_ok() {
+            if pusl_trace {
                 println!("{:?}", state);
             }
-            if env::var("PUSL_TRACE_VAR").is_ok() {
+            if pusl_trace_var {
                 println!("{:?}", &state.current_frame.op_stack);
             }
 
@@ -618,15 +621,9 @@ fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
                         other => panic!("Cannot Assign to field of {:?}", other),
                     };
 
-                    if is_let {
-                        (*object)
-                            .borrow_mut()
-                            .assign_field(reference_name.as_str(), value, true);
-                    } else {
-                        (*object)
-                            .borrow_mut()
-                            .assign_field(reference_name.as_str(), value, false);
-                    }
+                    (*object)
+                        .borrow_mut()
+                        .assign_field(reference_name.as_str(), value, is_let);
                 }
                 OpCode::DuplicateMany(n) => {
                     let len = state.current_frame.op_stack.len();
@@ -783,59 +780,31 @@ fn compare(lhs: Value, rhs: Value, compare: Compare) -> Value {
     };
 
     let result = if let Some(invert) = equality {
-        let is_equal = match lhs {
-            Value::Null => matches!(rhs, Value::Null),
-            Value::Boolean(lhs) => {
-                if let Value::Boolean(rhs) = rhs {
-                    lhs == rhs
-                } else {
-                    false
-                }
-            }
-            Value::Integer(lhs) => match rhs {
-                Value::Integer(rhs) => lhs == rhs,
-                Value::Float(rhs) => lhs as f64 == rhs,
-                _ => false,
-            },
-            Value::Float(lhs) => match rhs {
-                Value::Integer(rhs) => lhs == rhs as f64,
-                Value::Float(rhs) => lhs == rhs,
-                _ => false,
-            },
-            Value::String(lhs) => {
-                if let Value::String(rhs) = rhs {
-                    *lhs == *rhs
-                } else {
-                    false
-                }
-            }
-            Value::Function((lhs_target, lhs_self)) => {
-                if let Value::Function((rhs_target, rhs_self)) = rhs {
-                    if lhs_self == rhs_self {
-                        match lhs_target {
-                            object::FunctionTarget::Native(lfun) => match rhs_target {
-                                object::FunctionTarget::Native(rfun) => lfun == rfun,
-                                object::FunctionTarget::Pusl(_) => false,
-                            },
-                            object::FunctionTarget::Pusl(lfun) => match rhs_target {
-                                object::FunctionTarget::Native(_) => false,
-                                object::FunctionTarget::Pusl(rfun) => lfun == rfun,
-                            },
+        let is_equal = match (lhs, rhs) {
+            // Nulls
+            (Value::Null, Value::Null) => true,
+            // Booleans
+            (Value::Boolean(lhs), Value::Boolean(rhs)) => lhs == rhs,
+            // Numbers
+            (Value::Integer(lhs), Value::Integer(rhs)) => lhs == rhs,
+            (Value::Integer(lhs), Value::Float(rhs)) => lhs as f64 == rhs,
+            (Value::Float(lhs), Value::Integer(rhs)) => lhs == rhs as f64,
+            (Value::Float(lhs), Value::Float(rhs)) => lhs == rhs,
+            // Strings
+            (Value::String(lhs), Value::String(rhs)) => *lhs == *rhs,
+            // Functions
+            (Value::Function((lhs_target, lhs_self)),
+                Value::Function((rhs_target, rhs_self))) => {
+                    lhs_self == rhs_self && 
+                        match (lhs_target, rhs_target) {
+                            (FunctionTarget::Native(lfun), FunctionTarget::Native(rfun)) => lfun == rfun,
+                            (FunctionTarget::Pusl(lfun), FunctionTarget::Pusl(rfun)) => lfun == rfun,
+                            _ => false
                         }
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                }
             }
-            Value::Object(lhs) => {
-                if let Value::Object(rhs) = rhs {
-                    lhs == rhs
-                } else {
-                    false
-                }
-            }
+            // Objects
+            (Value::Object(lhs), Value::Object(rhs)) => rhs == lhs,
+            _ => false,
         };
         is_equal ^ invert
     } else {
