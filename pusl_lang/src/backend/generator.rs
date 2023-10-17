@@ -128,10 +128,10 @@ fn assemble_end(st: &RefCell<ExecutionState>) -> Value {
     Value::Object(gc_ptr)
 }
 
-fn has_next<'a: 'b, 'b>(
+fn has_next<'a>(
     args: Vec<Value>,
     this: Option<Value>,
-    st: &'a RefCell<ExecutionState<'b>>,
+    st: &'a RefCell<ExecutionState<'a>>,
 ) -> Value {
     argparse::parse0(args);
     if let Some(Value::Object(obj_ptr)) = &this {
@@ -167,9 +167,9 @@ fn has_next<'a: 'b, 'b>(
     }
 }
 
-fn run_frame<'a: 'b, 'b>(
+fn run_frame<'a>(
     frame: &mut StackFrame,
-    st: &'a RefCell<ExecutionState<'b>>,
+    st: &'a RefCell<ExecutionState<'a>>,
 ) -> ExecuteReturn {
     let mut old_stack = Vec::new();
     {
