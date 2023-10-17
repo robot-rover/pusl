@@ -109,9 +109,6 @@ impl AsRef<Function> for ResolvedFunction {
 pub struct ErrorCatch {
     pub begin: usize,
     pub filter: usize,
-    pub yoink: usize,
-    // TODO: why isn't this a pool reference too
-    pub variable_name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -257,8 +254,8 @@ impl Debug for Function {
             for (index, catch) in self.catches.iter().enumerate() {
                 writeln!(
                     f,
-                    "    {:3}; {}:{}, {} -> {}",
-                    index, catch.begin, catch.filter, catch.variable_name, catch.yoink
+                    "    {:3}; {}:{} -> {}",
+                    index, catch.begin, catch.filter - 1, catch.filter
                 )?;
             }
             writeln!(f, "Code:")?;
@@ -711,17 +708,34 @@ fn linearize_try(
 ) {
     let try_begin_index = func.function.code.len();
     linearize_exp_ref(try_body, func, false);
-    let skip_index_setter = func.function.code.place_jump(false);
+    let skip_filter_setter = func.function.code.place_jump(false);
     let try_filter_index = func.function.code.len();
+    // Runtime places error on stack
+    let pool_fn_index = func.function.add_reference(String::from("instance_of"));
+    func.function.code.push(OpCode::PushBuiltin(pool_fn_index));
+    // Stack is now error/instance_of
+    func.function.code.push(OpCode::DuplicateDeep(1));
+    // Stack is now error/instace_of/error
     linearize_exp_ref(filter_expr, func, true);
-    let try_yoink_index = func.function.code.len();
+    // Stack is now error/instance_of/error/filter
+    func.function.code.push(OpCode::FunctionCall(2));
+    // Stack is now error/cond
+    let filter_match_jump_setter = func.function.code.place_jump(true);
+    // Stack is now error and instance_of = false
+    func.function.code.push(OpCode::Yeet); // Re-throw error
+    filter_match_jump_setter(&mut func.function.code, None);
+    // Stack is now error and instance_of = true
+    let error_var_idx = func.function.add_reference(error_variable);
+    func.function.code.push(OpCode::AssignReference(error_var_idx, true));
+
+    // Stack is now empty
     linearize_exp_ref(yoink_body, func, false);
-    skip_index_setter(&mut func.function.code, None);
+
+    skip_filter_setter(&mut func.function.code, None);
+
     func.function.catches.push(ErrorCatch {
         begin: try_begin_index,
         filter: try_filter_index,
-        yoink: try_yoink_index,
-        variable_name: error_variable,
     });
 }
 

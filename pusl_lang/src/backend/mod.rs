@@ -3,8 +3,8 @@ use std::{cell::RefCell, collections::HashMap, env, io, ffi::OsStr};
 use anymap::AnyMap;
 use garbage::{Gc, ManagedPool, MarkTrace};
 
-use crate::backend::linearize::{ByteCodeFile, ErrorCatch};
-use crate::backend::object::{is_instance_of, FnPtr, Object, ObjectPtr, PuslObject, Value};
+use crate::backend::linearize::ByteCodeFile;
+use crate::backend::object::{FnPtr, Object, ObjectPtr, PuslObject, Value};
 use crate::parser::expression::Compare;
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -237,36 +237,11 @@ enum ExecuteReturn {
 }
 
 fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
-    let mut current_catch: Option<(ObjectPtr, ErrorCatch)> = None;
     loop {
         let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
         {
             let mut state = st.borrow_mut();
             let current_idx = state.current_frame.index;
-            if let Some((error, catch)) = current_catch.take() {
-                if current_idx == catch.yoink {
-                    let filter = state.current_frame.op_stack.pop().unwrap();
-                    if let Value::Object(object_ptr) = filter {
-                        if is_instance_of(error.clone(), &object_ptr) {
-                            state
-                                .current_frame
-                                .variables
-                                .push(VariableStack::Variable(Variable {
-                                    value: Value::Object(error),
-                                    name: catch.variable_name,
-                                }))
-                        } else {
-                            match unwind_stack(&mut state, current_idx, error) {
-                                Ok(error_catch) => current_catch = Some(error_catch),
-                                Err(ret_val) => return ExecuteReturn::Error(ret_val),
-                            }
-                            continue;
-                        }
-                    }
-                } else {
-                    current_catch = Some((error, catch));
-                }
-            }
 
             if env::var("PUSL_TRACE").is_ok() {
                 println!("{:?}", state);
@@ -688,14 +663,8 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                 }
                 OpCode::Yeet => {
                     let error = state.current_frame.op_stack.pop().unwrap();
-                    let error_obj = if let Value::Object(object_ptr) = error {
-                        object_ptr
-                    } else {
-                        panic!("Can only yeet an object, not {:?}", error);
-                    };
-                    match unwind_stack(&mut state, current_idx, error_obj) {
-                        Ok(error_catch) => current_catch = Some(error_catch),
-                        Err(ret_val) => return ExecuteReturn::Error(ret_val),
+                    if let Err(error) = unwind_stack(&mut state, current_idx, error) {
+                        return ExecuteReturn::Error(error);
                     }
                 }
             }
@@ -710,20 +679,21 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
 fn unwind_stack(
     state: &mut ExecutionState,
     mut current_idx: usize,
-    error: ObjectPtr,
-) -> Result<(ObjectPtr, ErrorCatch), Value> {
+    error: Value,
+) -> Result<(), Value> {
     loop {
         for catch in &state.current_frame.bfunc.target.as_ref().catches {
             if catch.begin <= current_idx && catch.filter > current_idx {
                 state.current_frame.index = catch.filter;
-                return Ok((error, catch.clone()));
+                state.current_frame.op_stack.push(error);
+                return Ok(());
             }
         }
         if let Some(new_frame) = state.execution_stack.pop() {
             state.current_frame = new_frame;
             current_idx = state.current_frame.index;
         } else {
-            return Err(Value::Object(error));
+            return Err(error);
         }
     }
 }
