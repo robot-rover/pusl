@@ -24,8 +24,9 @@ let innerCatch = fn(call, type):
         call()
         println("Bad Inner")
     yoink type error:
-        print("Caught in Inner ", error.message)
+        println("Caught in Inner ", error.message)
 
+println("Stage 1")
 try:
     try:
         throwA()
@@ -35,6 +36,7 @@ try:
 yoink exceptionA error:
     println("Should catch A")
 
+println("Stage 2")
 try:
     try:
         throwA()
@@ -44,6 +46,7 @@ try:
 yoink exception error:
     println("Should catch A")
 
+println("Stage 3")
 try:
     try:
         innerCatch(throwA, exceptionC)
@@ -53,8 +56,10 @@ try:
 yoink exception error:
     println("Should catch A")
 
+println("Stage 4")
 innerCatch(throwA2, exceptionA)
 
+println("Stage 5")
 try:
     try:
         yeet exceptionA
