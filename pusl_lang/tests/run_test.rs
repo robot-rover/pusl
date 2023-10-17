@@ -1,7 +1,7 @@
 mod test_util;
 
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
-use pusl_lang::backend::{startup, ExecContext};
+use pusl_lang::backend::{startup, ExecContext, execute};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;
@@ -32,7 +32,8 @@ fn run_generator_test() {
     let mut output = Vec::new();
     ctx.stream = Some(&mut output);
 
-    startup(code, path, ctx);
+    let mut state = startup(code, path, ctx);
+    let result = execute(&mut state);
     let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
 
     compare_test_eq(&actual, "run", "generator")
@@ -53,7 +54,8 @@ fn run_simple_test() {
     let mut output = Vec::new();
     ctx.stream = Some(&mut output);
 
-    startup(code, path, ctx);
+    let mut state = startup(code, path, ctx);
+    let result = execute(&mut state);
     let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
 
     compare_test_eq(&actual, "run", "small")
@@ -72,7 +74,8 @@ fn run_error_test() {
     let mut output = Vec::new();
     ctx.stream = Some(&mut output);
 
-    startup(code, path, ctx);
+    let mut state = startup(code, path, ctx);
+    let result = execute(&mut state);
     let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
 
     compare_test_eq(&actual, "run", "error")
@@ -92,7 +95,8 @@ fn run_fibb_test() {
     let mut output = Vec::new();
     ctx.stream = Some(&mut output);
 
-    startup(code, path, ctx);
+    let mut state = startup(code, path, ctx);
+    let result = execute(&mut state);
     let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
 
     compare_test_eq(&actual, "run", "fibb")
@@ -112,7 +116,8 @@ fn run_yoink_test() {
     let mut output = Vec::new();
     ctx.stream = Some(&mut output);
 
-    startup(code, path, ctx);
+    let mut state = startup(code, path, ctx);
+    let result = execute(&mut state);
     let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
 
     compare_test_eq(&actual, "run", "yoink")

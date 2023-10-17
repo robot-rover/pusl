@@ -6,7 +6,7 @@ use crate::backend::list;
 use crate::backend::object::{PuslObject, Value};
 use crate::backend::{argparse, generator};
 use anymap::AnyMap;
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, io::Write};
 
 pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Value>, AnyMap) {
     let mut map = HashMap::new();

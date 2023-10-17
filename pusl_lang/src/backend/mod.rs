@@ -136,6 +136,33 @@ impl<'a> Default for ExecContext<'a> {
     }
 }
 
+enum WriteOption<'a> {
+    DYN(&'a mut dyn io::Write),
+    DEFAULT(io::Stdout),
+}
+
+impl<'a> io::Write for WriteOption<'a> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            WriteOption::DYN(write) => write.write(buf),
+            WriteOption::DEFAULT(stdout) => stdout.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            WriteOption::DYN(write) => write.flush(),
+            WriteOption::DEFAULT(stdout) => stdout.flush(),
+        }
+    }
+}
+
+impl<'a> From<Option<&'a mut dyn io::Write>> for WriteOption<'a> {
+    fn from(value: Option<&'a mut dyn io::Write>) -> Self {
+        value.map(|write| WriteOption::DYN(write)).unwrap_or_else(|| WriteOption::DEFAULT(io::stdout()))
+    }
+}
+
 fn process_bcf(
     bcf: ByteCodeFile,
     path: Vec<String>,
@@ -158,7 +185,7 @@ pub struct ExecutionState<'a> {
     builtins: HashMap<&'static str, Value>,
     builtin_data: AnyMap,
     registry: Vec<NativeFn<'a>>,
-    stream: &'a mut dyn io::Write,
+    stream: WriteOption<'a>,
 }
 
 impl<'a> Debug for ExecutionState<'a> {
@@ -182,7 +209,7 @@ impl<'a> Debug for ExecutionState<'a> {
     }
 }
 
-pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
+pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) -> RefCell<ExecutionState> {
     let mut registry = Vec::new();
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
@@ -223,9 +250,6 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
     let (current_frame, resolution) = process_bcf(top, main_path, &resolved_imports, &mut gc);
     resolved_imports.push(resolution);
 
-    let mut stdout_handle = None;
-
-    let stream = stream.unwrap_or_else(|| stdout_handle.insert(io::stdout()));
     let state = ExecutionState {
         imports: resolved_imports,
         execution_stack: Vec::new(),
@@ -235,26 +259,23 @@ pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) {
         builtins,
         builtin_data,
         registry,
-        stream,
+        stream: stream.into(),
     };
 
     let rstate = RefCell::new(state);
 
-    let result = execute(&rstate);
-    match result {
-        Return(ret_val) => println!("Execution Returned {:?}", ret_val),
-        Yield(yield_val) => println!("Execution Yielded {:?}", yield_val),
-        ExecuteReturn::Error(error) => println!("Uncaught Error {:?}", error),
-    }
+    rstate
 }
 
-enum ExecuteReturn {
+#[derive(Debug)]
+pub enum ExecuteReturn {
     Return(Value),
     Yield(Value),
     Error(Value),
+    Break(),
 }
 
-fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
+pub fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
     let pusl_trace = env::var("PUSL_TRACE").is_ok();
     let pusl_trace_var = env::var("PUSL_TRACE_VAR").is_ok();
 
