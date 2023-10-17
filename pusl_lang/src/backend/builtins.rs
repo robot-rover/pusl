@@ -1,12 +1,12 @@
 use super::{
     object::{self, NativeFn, ObjectPtr},
-    ExecutionState,
+    ExecStateRef,
 };
 use crate::backend::list;
 use crate::backend::object::{PuslObject, Value};
 use crate::backend::{argparse, generator};
 use anymap::AnyMap;
-use std::{cell::RefCell, collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write};
 
 pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Value>, AnyMap) {
     let mut map = HashMap::new();
@@ -24,7 +24,7 @@ pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Valu
     (map, data_map)
 }
 
-fn is_instance_of(args: Vec<Value>, _: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn is_instance_of(args: Vec<Value>, _: Option<Value>, _: ExecStateRef) -> Value {
     let (obj, typ): (Value, Value) = argparse::parse2(args);
     Value::Boolean(match (typ, obj) {
         (Value::Null, Value::Null) => true,
@@ -40,21 +40,21 @@ fn is_instance_of(args: Vec<Value>, _: Option<Value>, _: &RefCell<ExecutionState
     })
 }
 
-fn type_of(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+fn type_of(args: Vec<Value>, _: Option<Value>, st: ExecStateRef) -> Value {
     let value: Value = argparse::parse1(args);
     let type_string = value.type_string();
     let gc_ptr = st.borrow_mut().gc.place_in_heap(type_string.to_owned());
     Value::String(gc_ptr)
 }
 
-fn print(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+fn print(args: Vec<Value>, _: Option<Value>, st: ExecStateRef) -> Value {
     for value in args.into_iter() {
         write!(st.borrow_mut().stream, "{}", value).unwrap();
     }
     Value::Null
 }
 
-fn println(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+fn println(args: Vec<Value>, _: Option<Value>, st: ExecStateRef) -> Value {
     for value in args.into_iter() {
         write!(st.borrow_mut().stream, "{}", value).unwrap();
     }
@@ -63,13 +63,13 @@ fn println(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> 
     Value::Null
 }
 
-fn native_import(args: Vec<Value>, _: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn native_import(args: Vec<Value>, _: Option<Value>, _: ExecStateRef) -> Value {
     #[allow(unused_variables)]
     let import_name: Value = argparse::parse1(args);
     unimplemented!();
 }
 
-fn new_object(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+fn new_object(args: Vec<Value>, _: Option<Value>, st: ExecStateRef) -> Value {
     let super_obj: Option<ObjectPtr> = argparse::parse_option(args);
 
     let object_ptr = if let Some(super_obj) = super_obj {

@@ -6,7 +6,7 @@ use std::any::Any;
 use std::fmt::Debug;
 use std::{cell::RefCell, collections::HashMap, fmt};
 
-use super::{object::NativeFn, ExecutionState};
+use super::{object::NativeFn, ExecStateRef};
 
 struct List {
     vec: Vec<Value>,
@@ -70,7 +70,7 @@ pub fn register(
     });
 }
 
-fn new_list(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+fn new_list(args: Vec<Value>, _: Option<Value>, st: ExecStateRef) -> Value {
     let list_builtins = *st
         .borrow()
         .builtin_data
@@ -100,20 +100,20 @@ fn get_list_vec<R, T: FnOnce(&mut Vec<Value>) -> R>(object: &Option<Value>, acti
     }
 }
 
-fn list_push(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn list_push(mut args: Vec<Value>, this: Option<Value>, _: ExecStateRef) -> Value {
     let value = args.pop().expect("must call push with 1 argument");
     assert!(args.is_empty());
     get_list_vec(&this, |vec| vec.push(value));
     Value::Null
 }
 
-fn list_len(args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn list_len(args: Vec<Value>, this: Option<Value>, _: ExecStateRef) -> Value {
     argparse::parse0(args);
     let len = get_list_vec(&this, |vec| vec.len());
     Value::Integer(len as i64)
 }
 
-fn list_index_get(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn list_index_get(mut args: Vec<Value>, this: Option<Value>, _: ExecStateRef) -> Value {
     let index = args.pop().expect("must call @index_get with 1 argument");
     assert!(args.is_empty());
     let index = if let Value::Integer(index) = index {
@@ -125,7 +125,7 @@ fn list_index_get(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<Executi
     element.expect("Index out of bounds")
 }
 
-fn list_index_set(mut args: Vec<Value>, this: Option<Value>, _: &RefCell<ExecutionState>) -> Value {
+fn list_index_set(mut args: Vec<Value>, this: Option<Value>, _: ExecStateRef) -> Value {
     let index: Value = args.pop().expect("must call @index_set with 2 arguments");
     let value: Value = args.pop().expect("must call @index_set with 2 arguments");
     let index = if let Value::Integer(index) = index {

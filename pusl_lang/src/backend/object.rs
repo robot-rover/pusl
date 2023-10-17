@@ -1,4 +1,4 @@
-use super::{BoundFunction, ExecutionState, StackFrame};
+use super::{BoundFunction, ExecStateRef, StackFrame};
 use bitflags::_core::cell::RefCell;
 use bitflags::_core::fmt::Formatter;
 use fmt::Display;
@@ -12,7 +12,7 @@ use std::fmt::Debug;
 
 pub type ObjectPtr = Gc<RefCell<dyn Object>>;
 pub type StringPtr = Gc<String>;
-pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, &'a RefCell<ExecutionState<'a>>) -> Value;
+pub type NativeFn<'a> = fn(Vec<Value>, Option<Value>, ExecStateRef<'a>) -> Value;
 pub type FnPtr = Gc<BoundFunction>;
 pub type GeneratorFn = Gc<StackFrame>;
 pub type MethodPtr = (FunctionTarget, Option<ObjectPtr>);

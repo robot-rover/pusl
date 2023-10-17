@@ -11,6 +11,8 @@ use std::path::PathBuf;
 
 use std::fmt::{self, Debug};
 
+pub type ExecStateRef<'a> = &'a RefCell<ExecutionState<'a>>;
+
 #[macro_use]
 pub mod object;
 pub mod argparse;
@@ -125,6 +127,7 @@ impl StackFrame {
 pub struct ExecContext<'a> {
     pub resolve: fn(Vec<String>) -> Option<ByteCodeFile>,
     pub stream: Option<&'a mut dyn io::Write>,
+    // pub interrupt: FnMut(ExecStateRef<'a>)
 }
 
 impl<'a> Default for ExecContext<'a> {
@@ -132,6 +135,7 @@ impl<'a> Default for ExecContext<'a> {
         ExecContext {
             resolve: |_| None,
             stream: None,
+            // interrupt: |_| {},
         }
     }
 }
@@ -159,7 +163,9 @@ impl<'a> io::Write for WriteOption<'a> {
 
 impl<'a> From<Option<&'a mut dyn io::Write>> for WriteOption<'a> {
     fn from(value: Option<&'a mut dyn io::Write>) -> Self {
-        value.map(|write| WriteOption::DYN(write)).unwrap_or_else(|| WriteOption::DEFAULT(io::stdout()))
+        value
+            .map(|write| WriteOption::DYN(write))
+            .unwrap_or_else(|| WriteOption::DEFAULT(io::stdout()))
     }
 }
 
@@ -209,7 +215,11 @@ impl<'a> Debug for ExecutionState<'a> {
     }
 }
 
-pub fn startup(main: ByteCodeFile, main_path: PathBuf, ctx: ExecContext) -> RefCell<ExecutionState> {
+pub fn startup(
+    main: ByteCodeFile,
+    main_path: PathBuf,
+    ctx: ExecContext<'_>,
+) -> RefCell<ExecutionState> {
     let mut registry = Vec::new();
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
@@ -272,10 +282,9 @@ pub enum ExecuteReturn {
     Return(Value),
     Yield(Value),
     Error(Value),
-    Break(),
 }
 
-pub fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
+pub fn execute<'a>(st: ExecStateRef<'a>) -> ExecuteReturn {
     let pusl_trace = env::var("PUSL_TRACE").is_ok();
     let pusl_trace_var = env::var("PUSL_TRACE_VAR").is_ok();
 

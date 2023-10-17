@@ -9,10 +9,10 @@ use crate::backend::ExecuteReturn::Yield;
 use anymap::AnyMap;
 use std::fmt::{Debug, Formatter};
 
-use super::argparse;
 use super::object::ObjectPtr;
 use super::ExecutionState;
 use super::StackFrame;
+use super::{argparse, ExecStateRef};
 
 struct Generator {
     stack: Option<StackFrame>,
@@ -107,7 +107,7 @@ pub fn new_generator(stack_frame: StackFrame, st: &mut ExecutionState) -> Value 
     Value::Object(gc_ptr)
 }
 
-fn is_end(args: Vec<Value>, this: Option<Value>, _st: &RefCell<ExecutionState>) -> Value {
+fn is_end(args: Vec<Value>, this: Option<Value>, _st: ExecStateRef) -> Value {
     assert!(this.is_none());
     let obj: Value = argparse::parse1(args);
     Boolean(check_is_end(&obj))
@@ -121,18 +121,14 @@ fn check_is_end(value: &Value) -> bool {
     }
 }
 
-fn assemble_end(st: &RefCell<ExecutionState>) -> Value {
+fn assemble_end(st: ExecStateRef) -> Value {
     let object = RefCell::new(IterationEnd);
     let gc_ptr = st.borrow_mut().gc.place_in_heap(object) as ObjectPtr;
 
     Value::Object(gc_ptr)
 }
 
-fn has_next<'a>(
-    args: Vec<Value>,
-    this: Option<Value>,
-    st: &'a RefCell<ExecutionState<'a>>,
-) -> Value {
+fn has_next<'a>(args: Vec<Value>, this: Option<Value>, st: ExecStateRef<'a>) -> Value {
     argparse::parse0(args);
     if let Some(Value::Object(obj_ptr)) = &this {
         if let Some(generator) = obj_ptr
@@ -150,6 +146,7 @@ fn has_next<'a>(
                         .expect("No stack in generator object"),
                     st,
                 );
+                // TODO: Pass through exceptions
                 if let Yield(val) = ex_return {
                     generator.next_val = Some(val);
                     true
@@ -167,10 +164,7 @@ fn has_next<'a>(
     }
 }
 
-fn run_frame<'a>(
-    frame: &mut StackFrame,
-    st: &'a RefCell<ExecutionState<'a>>,
-) -> ExecuteReturn {
+fn run_frame<'a>(frame: &mut StackFrame, st: ExecStateRef<'a>) -> ExecuteReturn {
     let mut old_stack = Vec::new();
     {
         let mut stb = st.borrow_mut();
@@ -186,11 +180,7 @@ fn run_frame<'a>(
     ret_val
 }
 
-pub fn next<'a>(
-    args: Vec<Value>,
-    this: Option<Value>,
-    st: &'a RefCell<ExecutionState<'a>>,
-) -> Value {
+pub fn next<'a>(args: Vec<Value>, this: Option<Value>, st: ExecStateRef<'a>) -> Value {
     argparse::parse0(args);
     if let Some(Value::Object(obj_ptr)) = &this {
         if let Some(generator) = obj_ptr
@@ -211,6 +201,7 @@ pub fn next<'a>(
                         .expect("No stack in generator object"),
                     st,
                 );
+                // TODO: aass through exceptions
                 if let Yield(val) = ex_return {
                     val
                 } else {

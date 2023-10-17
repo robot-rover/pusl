@@ -1,7 +1,7 @@
 mod test_util;
 
 use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
-use pusl_lang::backend::{startup, ExecContext, execute};
+use pusl_lang::backend::{execute, startup, ExecContext};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use std::path::PathBuf;
