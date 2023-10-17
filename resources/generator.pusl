@@ -10,12 +10,14 @@ let gen = range(0, 10)
 while gen.hasNext():
     print(gen.next(), "\n")
 
+println("Part 2")
 gen = range(1, 5)
 let i = 1
 while i < 5:
     print(gen.next(), "\n")
     i = i + 1
 
+println("Part 3")
 let fib = fn():
     let a = 0
     let b = 1
@@ -32,10 +34,18 @@ while i < 15:
     l.push(it.next())
     i = i + 1
 
+println("Part 4")
 let idx = range(0,l.len())
 while idx.hasNext():
     print(l[idx.next()], ", ")
 # print(l, "\n")
 
-for num in range(11, 15):
-    print(num, ", ")
+println("Part 5")
+let rec_range = fn[range](start, end):
+    let inner_range = range(start-1, end-1)
+    while inner_range.hasNext():
+        yield inner_range.next() + 1
+
+let my_rec_range = rec_range(0,5)
+while my_rec_range.hasNext():
+    println(my_rec_range.next())

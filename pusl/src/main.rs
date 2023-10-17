@@ -8,7 +8,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use clap::{App, Arg, SubCommand};
 use pusl_lang::backend::{
     linearize::{linearize_file, ByteCodeFile},
-    startup, ExecContext,
+    startup, ExecContext, execute,
 };
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
@@ -159,7 +159,8 @@ fn main() -> io::Result<()> {
                 println!("{:#?}", bcf.base_func);
             } else {
                 let ctx = ExecContext::default();
-                startup(bcf, path, ctx);
+                let mut state = startup(bcf, path, ctx);
+                execute(&mut state);
             }
         }
         ("interpret", Some(matches)) => {
@@ -167,7 +168,8 @@ fn main() -> io::Result<()> {
 
             let bcf = compile_from_source_path(&path, verbosity)?;
             let ctx = ExecContext::default();
-            startup(bcf, path, ctx);
+            let mut state = startup(bcf, path, ctx);
+            execute(&mut state);
         }
         _ => println!("{}", matches.usage()),
     }
