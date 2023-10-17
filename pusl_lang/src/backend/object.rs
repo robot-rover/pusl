@@ -4,7 +4,6 @@ use bitflags::_core::fmt::Formatter;
 use fmt::Display;
 use std::any::Any;
 
-
 use garbage::{Gc, MarkTrace};
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -43,7 +42,8 @@ impl<'a> Debug for ObjectFmtWrapper<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0.try_borrow() {
             Ok(borrow) => Debug::fmt(&*borrow, f),
-            Err(_) => f.debug_struct("Object")
+            Err(_) => f
+                .debug_struct("Object")
                 .field("cannot_borrow", &true)
                 .finish_non_exhaustive(),
         }
@@ -62,8 +62,7 @@ impl fmt::Debug for Value {
                 let mut debug = f.debug_struct("Function");
                 match function {
                     FunctionTarget::Native(native) => debug.field("native", native),
-                    FunctionTarget::Pusl(pusl) => debug
-                        .field("pusl", &**pusl)
+                    FunctionTarget::Pusl(pusl) => debug.field("pusl", &**pusl),
                 };
                 if let Some(this) = this {
                     debug.field("this", &ObjectFmtWrapper(this));

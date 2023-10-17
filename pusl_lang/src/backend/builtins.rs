@@ -1,5 +1,5 @@
 use super::{
-    object::{NativeFn, ObjectPtr, self},
+    object::{self, NativeFn, ObjectPtr},
     ExecutionState,
 };
 use crate::backend::list;
@@ -33,8 +33,9 @@ fn is_instance_of(args: Vec<Value>, _: Option<Value>, _: &RefCell<ExecutionState
         (Value::Float(_), Value::Float(_)) => true,
         (Value::String(_), Value::String(_)) => true,
         (Value::Function(_), Value::Function(_)) => true,
-        (Value::Object(super_obj), Value::Object(inner_obj)) =>
-            object::is_instance_of(inner_obj, &super_obj),
+        (Value::Object(super_obj), Value::Object(inner_obj)) => {
+            object::is_instance_of(inner_obj, &super_obj)
+        }
         _ => false,
     })
 }

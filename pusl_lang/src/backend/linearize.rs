@@ -3,8 +3,8 @@ use crate::backend::object::{FnPtr, PuslObject, Value};
 use crate::backend::BoundFunction;
 use crate::lexer::token::Literal;
 use crate::parser::branch::{Branch, ConditionBody};
+use crate::parser::expression::Expression;
 use crate::parser::expression::{AssignAccess, AssignmentFlags};
-use crate::parser::expression::{Expression};
 use crate::parser::{Eval, ExpRef, Import, ParsedFile};
 
 use garbage::ManagedPool;
@@ -37,13 +37,7 @@ impl Debug for ByteCodeFile {
             writeln!(f, "ByteCode")?;
             writeln!(f, "Imports:")?;
             for (index, import) in self.imports.iter().enumerate() {
-                writeln!(
-                    f,
-                    "\t{:3}; {:?} as {}",
-                    index,
-                    import.path,
-                    import.alias
-                )?;
+                writeln!(f, "\t{:3}; {:?} as {}", index, import.path, import.alias)?;
             }
             write!(f, "{:#?}", self.base_func)?;
         }
@@ -255,7 +249,10 @@ impl Debug for Function {
                 writeln!(
                     f,
                     "    {:3}; {}:{} -> {}",
-                    index, catch.begin, catch.filter - 1, catch.filter
+                    index,
+                    catch.begin,
+                    catch.filter - 1,
+                    catch.filter
                 )?;
             }
             writeln!(f, "Code:")?;
@@ -392,15 +389,15 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             arguments
                 .into_iter()
                 .for_each(|argument| linearize_exp_ref(argument, func, true));
-            func.function
-                .code
-                .push(OpCode::FunctionCall(num_args));
+            func.function.code.push(OpCode::FunctionCall(num_args));
             true
         }
         Expression::FieldAccess { target, name } => {
             linearize_exp_ref(target, func, true);
             let reference_index = func.function.add_reference(name);
-            func.function.code.push(OpCode::FieldAccess(reference_index));
+            func.function
+                .code
+                .push(OpCode::FieldAccess(reference_index));
             true
         }
         Expression::Addition { lhs, rhs } => {
@@ -462,7 +459,10 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                         None
                     };
                     linearize_exp_ref(expression, func, true);
-                    func.function.code.push(OpCode::AssignField(target_index, flags.intersects(AssignmentFlags::LET)));
+                    func.function.code.push(OpCode::AssignField(
+                        target_index,
+                        flags.intersects(AssignmentFlags::LET),
+                    ));
                     if let Some(jump_setter) = skip_setter {
                         jump_setter(&mut func.function.code, None);
                     }
@@ -470,9 +470,7 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                 AssignAccess::Reference { name } => {
                     let target_index = func.function.add_reference(name);
                     let skip_setter = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.function
-                            .code
-                            .push(OpCode::PushReference(target_index));
+                        func.function.code.push(OpCode::PushReference(target_index));
                         func.function.code.push(OpCode::IsNull);
                         func.function.code.push(OpCode::Negate);
                         Some(func.function.code.place_jump(true))
@@ -480,9 +478,10 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                         None
                     };
                     linearize_exp_ref(expression, func, true);
-                    func.function
-                        .code
-                        .push(OpCode::AssignReference(target_index, flags.intersects(AssignmentFlags::LET)));
+                    func.function.code.push(OpCode::AssignReference(
+                        target_index,
+                        flags.intersects(AssignmentFlags::LET),
+                    ));
                     if let Some(jump_setter) = skip_setter {
                         jump_setter(&mut func.function.code, None);
                     }
@@ -492,35 +491,23 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
                     linearize_exp_ref(index, func, true);
 
                     let skip_setter = if flags.intersects(AssignmentFlags::CONDITIONAL) {
-                        func.function
-                            .code
-                            .push(OpCode::DuplicateDeep(1));
+                        func.function.code.push(OpCode::DuplicateDeep(1));
                         let pool_index = func.function.add_reference(String::from("@index_get"));
                         func.function.code.push(OpCode::FieldAccess(pool_index));
-                        func.function
-                            .code
-                            .push(OpCode::DuplicateDeep(1));
-                        func.function
-                            .code
-                            .push(OpCode::FunctionCall(1));
+                        func.function.code.push(OpCode::DuplicateDeep(1));
+                        func.function.code.push(OpCode::FunctionCall(1));
                         func.function.code.push(OpCode::IsNull);
                         func.function.code.push(OpCode::Negate);
                         Some(func.function.code.place_jump(true))
                     } else {
                         None
                     };
-                    func.function
-                        .code
-                        .push(OpCode::DuplicateDeep(1));
+                    func.function.code.push(OpCode::DuplicateDeep(1));
                     let pool_index = func.function.add_reference(String::from("@index_set"));
                     func.function.code.push(OpCode::FieldAccess(pool_index));
-                    func.function
-                        .code
-                        .push(OpCode::DuplicateDeep(1));
+                    func.function.code.push(OpCode::DuplicateDeep(1));
                     linearize_exp_ref(expression, func, true);
-                    func.function
-                        .code
-                        .push(OpCode::FunctionCall(2));
+                    func.function.code.push(OpCode::FunctionCall(2));
                     if let Some(jump_setter) = skip_setter {
                         jump_setter(&mut func.function.code, None);
                     }
@@ -535,9 +522,7 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
         Expression::DivideTruncate { lhs, rhs } => {
             linearize_exp_ref(lhs, func, true);
             linearize_exp_ref(rhs, func, true);
-            func.function
-                .code
-                .push(OpCode::DivideTruncate);
+            func.function.code.push(OpCode::DivideTruncate);
             true
         }
         Expression::Exponent { lhs, rhs } => {
@@ -576,9 +561,7 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             let new_func = linearize(body, params, binds);
             let index = func.sub_functions.len();
             func.sub_functions.push(new_func);
-            func.function
-                .code
-                .push(OpCode::PushFunction(index));
+            func.function.code.push(OpCode::PushFunction(index));
             true
         }
         Expression::Return { value } => {
@@ -594,9 +577,7 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             values
                 .into_iter()
                 .for_each(|value| linearize_exp_ref(value, func, true));
-            func.function
-                .code
-                .push(OpCode::FunctionCall(num_values));
+            func.function.code.push(OpCode::FunctionCall(num_values));
             true
         }
         Expression::ListAccess { target, index } => {
@@ -604,9 +585,7 @@ fn linearize_expr(expr: Expression, func: &mut BasicFunction, expand_stack: bool
             let pool_index = func.function.add_reference(String::from("@index_get"));
             func.function.code.push(OpCode::FieldAccess(pool_index));
             linearize_exp_ref(index, func, true);
-            func.function
-                .code
-                .push(OpCode::FunctionCall(1));
+            func.function.code.push(OpCode::FunctionCall(1));
             true
         }
         Expression::SelfReference => {
@@ -673,8 +652,7 @@ fn linearize_compare(
     assert!((less as usize) < body.len());
     linearize_exp_ref(lhs, func, true);
     linearize_exp_ref(rhs, func, true);
-    let jump_table_setter = func.function
-        .code.place_cmp_jump();
+    let jump_table_setter = func.function.code.place_cmp_jump();
     let indexes = body
         .into_iter()
         .map(|expr| {
@@ -726,7 +704,9 @@ fn linearize_try(
     filter_match_jump_setter(&mut func.function.code, None);
     // Stack is now error and instance_of = true
     let error_var_idx = func.function.add_reference(error_variable);
-    func.function.code.push(OpCode::AssignReference(error_var_idx, true));
+    func.function
+        .code
+        .push(OpCode::AssignReference(error_var_idx, true));
 
     // Stack is now empty
     linearize_exp_ref(yoink_body, func, false);
@@ -744,10 +724,10 @@ fn linearize_for(variable: String, iterable: ExpRef, body: ExpRef, func: &mut Ba
     let condition_idx = func.function.code.len();
     func.function.code.push(OpCode::Duplicate);
     let has_next_reference = func.function.add_reference("hasNext".to_string());
-    func.function.code.push(OpCode::FieldAccess(has_next_reference));
     func.function
         .code
-        .push(OpCode::FunctionCall(0));
+        .push(OpCode::FieldAccess(has_next_reference));
+    func.function.code.push(OpCode::FunctionCall(0));
     func.function.code.push(OpCode::Negate);
     let loop_end_setter = func.function.code.place_jump(true);
     func.function.code.push(OpCode::ScopeUp);
@@ -755,9 +735,7 @@ fn linearize_for(variable: String, iterable: ExpRef, body: ExpRef, func: &mut Ba
     func.function.code.push(OpCode::Duplicate);
     let next_reference = func.function.add_reference("next".to_string());
     func.function.code.push(OpCode::FieldAccess(next_reference));
-    func.function
-        .code
-        .push(OpCode::FunctionCall(0));
+    func.function.code.push(OpCode::FunctionCall(0));
 
     let target_idx = func.function.add_reference(variable);
     func.function

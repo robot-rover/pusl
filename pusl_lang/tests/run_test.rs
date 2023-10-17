@@ -4,8 +4,8 @@ use pusl_lang::backend::linearize::{linearize_file, ByteCodeFile};
 use pusl_lang::backend::{startup, ExecContext};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
-use test_util::compare_test_eq;
 use std::path::PathBuf;
+use test_util::compare_test_eq;
 
 const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 

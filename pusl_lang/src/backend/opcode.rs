@@ -1,6 +1,11 @@
 use std::fmt;
 
-use serde::{Serialize, Deserialize, ser::{self, SerializeSeq}, Serializer, Deserializer, de::Visitor, de::Error};
+use serde::{
+    de::Error,
+    de::Visitor,
+    ser::{self, SerializeSeq},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
 
 use crate::parser::expression::Compare;
 
@@ -349,41 +354,76 @@ impl ByteCodeArray {
     pub fn push(&mut self, op_code: OpCode) {
         match op_code {
             OpCode::Modulus => self.0.extend([ByteCode::op(OpCodeTag::Modulus)]),
-            OpCode::Literal(idx) => self.0.extend([ByteCode::op(OpCodeTag::Literal), ByteCode::val(idx)]),
-            OpCode::PushReference(idx) => self.0.extend([ByteCode::op(OpCodeTag::PushReference), ByteCode::val(idx)]),
-            OpCode::PushFunction(idx) => self.0.extend([ByteCode::op(OpCodeTag::PushFunction), ByteCode::val(idx)]),
-            OpCode::PushThis => self.0.extend([ByteCode::op(OpCodeTag::PushThis )]),
-            OpCode::FunctionCall(idx) => self.0.extend([ByteCode::op(OpCodeTag::FunctionCall), ByteCode::val(idx)]),
-            OpCode::FieldAccess(idx) => self.0.extend([ByteCode::op(OpCodeTag::FieldAccess), ByteCode::val(idx)]),
-            OpCode::Addition => self.0.extend([ByteCode::op(OpCodeTag::Addition )]),
-            OpCode::Subtraction => self.0.extend([ByteCode::op(OpCodeTag::Subtraction )]),
-            OpCode::Negate => self.0.extend([ByteCode::op(OpCodeTag::Negate )]),
-            OpCode::Multiply => self.0.extend([ByteCode::op(OpCodeTag::Multiply )]),
-            OpCode::Divide => self.0.extend([ByteCode::op(OpCodeTag::Divide )]),
-            OpCode::AssignReference(idx, is_let) => self.0.extend([ByteCode::op(OpCodeTag::AssignReference), ByteCode::val(idx), ByteCode::bool(is_let)]),
-            OpCode::AssignField(idx, is_let) => self.0.extend([ByteCode::op(OpCodeTag::AssignField), ByteCode::val(idx), ByteCode::bool(is_let)]),
-            OpCode::DivideTruncate => self.0.extend([ByteCode::op(OpCodeTag::DivideTruncate )]),
-            OpCode::Exponent => self.0.extend([ByteCode::op(OpCodeTag::Exponent )]),
-            OpCode::Compare(compare) => self.0.extend([ByteCode::op(OpCodeTag::Compare), ByteCode::cmp(compare)]),
-            OpCode::And => self.0.extend([ByteCode::op(OpCodeTag::And )]),
-            OpCode::Or => self.0.extend([ByteCode::op(OpCodeTag::Or )]),
-            OpCode::ScopeUp => self.0.extend([ByteCode::op(OpCodeTag::ScopeUp )]),
-            OpCode::ScopeDown => self.0.extend([ByteCode::op(OpCodeTag::ScopeDown )]),
-            OpCode::Return => self.0.extend([ByteCode::op(OpCodeTag::Return )]),
-            OpCode::ConditionalJump(offset) => self.0.extend([ByteCode::op(OpCodeTag::ConditionalJump), ByteCode::val(offset)]),
-            OpCode::ComparisonJump(off1, off2, off3) => self.0.extend([ByteCode::op(OpCodeTag::ComparisonJump), ByteCode::val(off1), ByteCode::val(off2), ByteCode::val(off3)]),
-            OpCode::Jump(offset) => self.0.extend([ByteCode::op(OpCodeTag::Jump), ByteCode::val(offset)]),
-            OpCode::Pop => self.0.extend([ByteCode::op(OpCodeTag::Pop )]),
-            OpCode::IsNull => self.0.extend([ByteCode::op(OpCodeTag::IsNull )]),
+            OpCode::Literal(idx) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::Literal), ByteCode::val(idx)]),
+            OpCode::PushReference(idx) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::PushReference), ByteCode::val(idx)]),
+            OpCode::PushFunction(idx) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::PushFunction), ByteCode::val(idx)]),
+            OpCode::PushThis => self.0.extend([ByteCode::op(OpCodeTag::PushThis)]),
+            OpCode::FunctionCall(idx) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::FunctionCall), ByteCode::val(idx)]),
+            OpCode::FieldAccess(idx) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::FieldAccess), ByteCode::val(idx)]),
+            OpCode::Addition => self.0.extend([ByteCode::op(OpCodeTag::Addition)]),
+            OpCode::Subtraction => self.0.extend([ByteCode::op(OpCodeTag::Subtraction)]),
+            OpCode::Negate => self.0.extend([ByteCode::op(OpCodeTag::Negate)]),
+            OpCode::Multiply => self.0.extend([ByteCode::op(OpCodeTag::Multiply)]),
+            OpCode::Divide => self.0.extend([ByteCode::op(OpCodeTag::Divide)]),
+            OpCode::AssignReference(idx, is_let) => self.0.extend([
+                ByteCode::op(OpCodeTag::AssignReference),
+                ByteCode::val(idx),
+                ByteCode::bool(is_let),
+            ]),
+            OpCode::AssignField(idx, is_let) => self.0.extend([
+                ByteCode::op(OpCodeTag::AssignField),
+                ByteCode::val(idx),
+                ByteCode::bool(is_let),
+            ]),
+            OpCode::DivideTruncate => self.0.extend([ByteCode::op(OpCodeTag::DivideTruncate)]),
+            OpCode::Exponent => self.0.extend([ByteCode::op(OpCodeTag::Exponent)]),
+            OpCode::Compare(compare) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::Compare), ByteCode::cmp(compare)]),
+            OpCode::And => self.0.extend([ByteCode::op(OpCodeTag::And)]),
+            OpCode::Or => self.0.extend([ByteCode::op(OpCodeTag::Or)]),
+            OpCode::ScopeUp => self.0.extend([ByteCode::op(OpCodeTag::ScopeUp)]),
+            OpCode::ScopeDown => self.0.extend([ByteCode::op(OpCodeTag::ScopeDown)]),
+            OpCode::Return => self.0.extend([ByteCode::op(OpCodeTag::Return)]),
+            OpCode::ConditionalJump(offset) => self.0.extend([
+                ByteCode::op(OpCodeTag::ConditionalJump),
+                ByteCode::val(offset),
+            ]),
+            OpCode::ComparisonJump(off1, off2, off3) => self.0.extend([
+                ByteCode::op(OpCodeTag::ComparisonJump),
+                ByteCode::val(off1),
+                ByteCode::val(off2),
+                ByteCode::val(off3),
+            ]),
+            OpCode::Jump(offset) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::Jump), ByteCode::val(offset)]),
+            OpCode::Pop => self.0.extend([ByteCode::op(OpCodeTag::Pop)]),
+            OpCode::IsNull => self.0.extend([ByteCode::op(OpCodeTag::IsNull)]),
             OpCode::Duplicate => self.0.extend([ByteCode::op(OpCodeTag::Duplicate)]),
-            OpCode::DuplicateMany(n) => self.0.extend([ByteCode::op(OpCodeTag::DuplicateMany), ByteCode::val(n)]),
-            OpCode::PushBuiltin(n) => self.0.extend([ByteCode::op(OpCodeTag::PushBuiltin), ByteCode::val(n)]),
-            OpCode::DuplicateDeep(n) => self.0.extend([ByteCode::op(OpCodeTag::DuplicateDeep), ByteCode::val(n)]),
+            OpCode::DuplicateMany(n) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::DuplicateMany), ByteCode::val(n)]),
+            OpCode::PushBuiltin(n) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::PushBuiltin), ByteCode::val(n)]),
+            OpCode::DuplicateDeep(n) => self
+                .0
+                .extend([ByteCode::op(OpCodeTag::DuplicateDeep), ByteCode::val(n)]),
             OpCode::PushSelf => self.0.extend([ByteCode::op(OpCodeTag::PushSelf)]),
             OpCode::Yield => self.0.extend([ByteCode::op(OpCodeTag::Yield)]),
             OpCode::Yeet => self.0.extend([ByteCode::op(OpCodeTag::Yeet)]),
         };
-
     }
 
     pub fn iter<'a>(&'a self) -> OpCodeIter<'a> {
@@ -407,7 +447,7 @@ impl ByteCodeArray {
         let jump_target_loc = self.0.len() - 1;
         return move |this, jump_target| {
             this.0[jump_target_loc] = ByteCode::val(jump_target.unwrap_or(this.len()));
-        }
+        };
     }
 
     pub fn place_cmp_jump(&mut self) -> impl FnOnce(&mut Self, [usize; 3]) {
@@ -417,7 +457,7 @@ impl ByteCodeArray {
             for i in 0..3 {
                 this.0[jump_target_arr_loc + i] = ByteCode::val(jump_target[i]);
             }
-        }
+        };
     }
 }
 
@@ -430,13 +470,11 @@ impl<'a> Iterator for OpCodeIter<'a> {
     type Item = (usize, OpCode);
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.array
-            .get(self.offset)
-            .map(|(result, new_offset)| {
-                let old_offset = self.offset;
-                self.offset = new_offset;
-                (old_offset, result)
-            })
+        self.array.get(self.offset).map(|(result, new_offset)| {
+            let old_offset = self.offset;
+            self.offset = new_offset;
+            (old_offset, result)
+        })
     }
 }
 
@@ -530,15 +568,11 @@ impl ByteCode {
     }
 
     fn bool(value: bool) -> Self {
-        ByteCode {
-            let_assign: value
-        }
+        ByteCode { let_assign: value }
     }
 
     fn cmp(value: Compare) -> Self {
-        ByteCode {
-            compare: value
-        }
+        ByteCode { compare: value }
     }
 
     fn as_op(self) -> OpCodeTag {
@@ -556,5 +590,4 @@ impl ByteCode {
     fn as_cmp(self) -> Compare {
         unsafe { self.compare }
     }
-
 }

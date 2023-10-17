@@ -1,9 +1,6 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt, fs,
-    io,
-};
+use std::{fmt, fs, io};
 
 const RESOURCES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../resources");
 const TARGET: &str = env!("CARGO_TARGET_TMPDIR");
@@ -21,10 +18,13 @@ where
     let expect_file = format!("{RESOURCES}/{test_mod}/{test_tag}-expect.json");
     let actual_file = format!("{TARGET}/{test_mod}/{test_tag}-actual.json");
 
-    let mut out_stream = io::BufWriter::new(fs::File::create(actual_file).expect("Cannot open actual output json"));
-    serde_json::to_writer_pretty(&mut out_stream, &actual).expect("Cannot serialize actual output json");
+    let mut out_stream =
+        io::BufWriter::new(fs::File::create(actual_file).expect("Cannot open actual output json"));
+    serde_json::to_writer_pretty(&mut out_stream, &actual)
+        .expect("Cannot serialize actual output json");
 
-    let mut in_stream = io::BufReader::new(fs::File::open(expect_file).expect("Cannot find expected output json"));
+    let mut in_stream =
+        io::BufReader::new(fs::File::open(expect_file).expect("Cannot find expected output json"));
     let expected =
         serde_json::from_reader::<_, T>(&mut in_stream).expect("Cannot parse expected output json");
 

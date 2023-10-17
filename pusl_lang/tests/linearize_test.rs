@@ -1,24 +1,20 @@
 mod test_util;
 
-use pusl_lang::backend::{linearize::{
-    linearize_file, BasicFunction, ByteCodeFile, Function,
-}, opcode::ByteCodeArray};
+use pusl_lang::backend::{
+    linearize::{linearize_file, BasicFunction, ByteCodeFile, Function},
+    opcode::ByteCodeArray,
+};
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
 use test_util::compare_test;
 
 const SMALL_SOURCE: &'static str = include_str!("../../resources/simple_program.pusl");
 
-
 const SECOND_SOURCE: &'static str = include_str!("../../resources/secondary_source.pusl");
 
 fn check_code_equal(expect: &ByteCodeArray, actual: &ByteCodeArray, context: &str) {
-    let expect_int = expect
-        .iter()
-        .collect::<Vec<_>>();
-    let actual_int = actual
-        .iter()
-        .collect::<Vec<_>>();
+    let expect_int = expect.iter().collect::<Vec<_>>();
+    let actual_int = actual.iter().collect::<Vec<_>>();
 
     assert_eq!(expect_int, actual_int, "Function {} code mismatch", context);
 }
@@ -56,7 +52,11 @@ fn check_function_equal(expect: &Function, actual: &Function, context: &str) {
         context
     );
     check_code_equal(ex_code, ac_code, context);
-    assert_eq!(ex_catches, ac_catches, "Function {} catches mismatch", context);
+    assert_eq!(
+        ex_catches, ac_catches,
+        "Function {} catches mismatch",
+        context
+    );
     assert_eq!(
         ex_is_generator, ac_is_generator,
         "Function {} is_generator mismatch",
