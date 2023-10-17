@@ -236,11 +236,12 @@ enum ExecuteReturn {
     Error(Value),
 }
 
-fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
+fn execute<'a>(st: &'a RefCell<ExecutionState<'a>>) -> ExecuteReturn {
     loop {
-        let mut native_fn_call: Option<(NativeFn, Vec<Value>, Option<Value>)> = None;
+    let native_fn_call: (NativeFn, Vec<Value>, Option<Value>);
+    loop {
+        let mut state = st.borrow_mut();
         {
-            let mut state = st.borrow_mut();
             let current_idx = state.current_frame.index;
 
             if env::var("PUSL_TRACE").is_ok() {
@@ -417,7 +418,8 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                                 .registry
                                 .get(handle)
                                 .expect("Out of bounds function handle");
-                            native_fn_call = Some((ptr, args, this));
+                            native_fn_call = (ptr, args, this);
+                            break;
                         }
                         _ => panic!("Value must be a function to call"),
                     };
@@ -663,16 +665,17 @@ fn execute<'a: 'b, 'b>(st: &'a RefCell<ExecutionState<'b>>) -> ExecuteReturn {
                 }
                 OpCode::Yeet => {
                     let error = state.current_frame.op_stack.pop().unwrap();
+                    // TODO: Calc catch as one opcode ahead so we don't have to store current_idx every loop
                     if let Err(error) = unwind_stack(&mut state, current_idx, error) {
                         return ExecuteReturn::Error(error);
                     }
                 }
             }
         }
-        if let Some((ptr, args, this)) = native_fn_call.take() {
-            let result = ptr(args, this, st);
-            st.borrow_mut().current_frame.op_stack.push(result);
-        }
+    }
+    let (ptr, args, this) = native_fn_call;
+    let result = ptr(args, this, st);
+    st.borrow_mut().current_frame.op_stack.push(result);
     }
 }
 
