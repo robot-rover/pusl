@@ -97,3 +97,23 @@ fn run_fibb_test() {
 
     compare_test_eq(&actual, "run", "fibb")
 }
+
+const YOINK_SOURCE: &'static str = include_str!("../../resources/yoink_filter.pusl");
+
+#[test]
+fn run_yoink_test() {
+    let lines = YOINK_SOURCE.lines();
+    let roots = lex(lines);
+    let ast = parse(roots);
+    let code = linearize_file(ast);
+    let path = PathBuf::from("../../resources/yoink.pusl");
+
+    let mut ctx = ExecContext::default();
+    let mut output = Vec::new();
+    ctx.stream = Some(&mut output);
+
+    startup(code, path, ctx);
+    let actual = String::from_utf8(output).expect("Invalid UTF8 in test output");
+
+    compare_test_eq(&actual, "run", "yoink")
+}

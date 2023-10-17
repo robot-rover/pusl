@@ -67,9 +67,7 @@ fn basic_gc_test() {
     let anchors: Vec<Gc<dyn MarkTrace>> = vec![ptr2 as Gc<dyn MarkTrace>];
     println!("{}", ptr1.borrow().0);
     pool.collect_garbage(anchors.iter());
-    println!("{}", ptr1.borrow().0);
     assert_eq!(&*drop_log.borrow(), &vec![1]);
-    println!("{}", ptr1.borrow().0);
 
     pool.collect_garbage(std::iter::empty());
     assert_eq!(&*drop_log.borrow(), &vec![1, 2, 3]);

@@ -1,0 +1,64 @@
+let exception = Object()
+let exceptionA = Object(exception)
+let exceptionA.message = "A"
+let exceptionB = Object(exception)
+let exceptionB.message = "B"
+let exceptionC = Object(exceptionB)
+let exceptionC.message = "C"
+
+let throwA = fn[exceptionA]():
+    println("Good")
+    yeet exceptionA
+    println("Bad")
+
+let throwA2 = fn[throwA]():
+    println("Outer Good")
+    throwA()
+    println("Outer Bad")
+
+let returnA = fn[exceptionA]():
+    return exceptionA
+
+let innerCatch = fn(call, type):
+    try:
+        call()
+        println("Bad Inner")
+    yoink type error:
+        print("Caught in Inner ", error.message)
+
+try:
+    try:
+        throwA()
+        println("BAD")
+    yoink exceptionB error:
+        println("Shouldn't catch B")
+yoink exceptionA error:
+    println("Should catch A")
+
+try:
+    try:
+        throwA()
+        println("BAD")
+    yoink exceptionB error:
+        println("Shouldn't catch B")
+yoink exception error:
+    println("Should catch A")
+
+try:
+    try:
+        innerCatch(throwA, exceptionC)
+        println("BAD")
+    yoink exceptionB error:
+        println("Shouldn't catch B")
+yoink exception error:
+    println("Should catch A")
+
+innerCatch(throwA2, exceptionA)
+
+try:
+    try:
+        yeet exceptionA
+    yoink returnA() error:
+        println("GOOD")
+yoink exception error:
+    println("Bad")

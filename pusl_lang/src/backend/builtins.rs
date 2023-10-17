@@ -13,6 +13,7 @@ pub fn get_builtins(registry: &mut Vec<NativeFn>) -> (HashMap<&'static str, Valu
     let mut data_map = AnyMap::new();
     map.insert("type_of", Value::native_fn(type_of, registry));
     map.insert("print", Value::native_fn(print, registry));
+    map.insert("println", Value::native_fn(println, registry));
     map.insert("native", Value::native_fn(native_import, registry));
     map.insert("Object", Value::native_fn(new_object, registry));
 
@@ -33,6 +34,15 @@ fn print(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Va
     for value in args.into_iter() {
         write!(st.borrow_mut().stream, "{}", value).unwrap();
     }
+    Value::Null
+}
+
+fn println(args: Vec<Value>, _: Option<Value>, st: &RefCell<ExecutionState>) -> Value {
+    for value in args.into_iter() {
+        write!(st.borrow_mut().stream, "{}", value).unwrap();
+    }
+    write!(st.borrow_mut().stream, "\n").unwrap();
+
     Value::Null
 }
 
