@@ -21,7 +21,7 @@ impl<T: ?Sized + Unsize<U> + MarkTrace, U: ?Sized + MarkTrace> DispatchFromDyn<G
 
 impl<T: MarkTrace + ?Sized + 'static> PartialEq for Gc<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.ptr == other.ptr
+        std::ptr::eq(self.ptr.as_ptr(), other.ptr.as_ptr())
     }
 }
 
