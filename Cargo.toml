@@ -3,5 +3,6 @@ members = [
     "pusl_lang",
     "garbage",
     "pusl",
-    "pusl_demo"
+    "pusl_demo",
+    "squirrel_lang",
 ]
