@@ -127,7 +127,7 @@ impl StackFrame {
 pub struct ExecContext<'a> {
     pub resolve: fn(Vec<String>) -> Option<ByteCodeFile>,
     pub stream: Option<&'a mut dyn io::Write>,
-    // pub interrupt: FnMut(ExecStateRef<'a>)
+    pub interrupt: Option<&'a mut dyn FnMut(&mut ExecutionState<'a>)>,
 }
 
 impl<'a> Default for ExecContext<'a> {
@@ -135,7 +135,7 @@ impl<'a> Default for ExecContext<'a> {
         ExecContext {
             resolve: |_| None,
             stream: None,
-            // interrupt: |_| {},
+            interrupt: None,
         }
     }
 }
@@ -192,6 +192,7 @@ pub struct ExecutionState<'a> {
     builtin_data: AnyMap,
     registry: Vec<NativeFn<'a>>,
     stream: WriteOption<'a>,
+    interrupt: Option<&'a mut dyn FnMut(&mut ExecutionState<'a>)>,
 }
 
 impl<'a> Debug for ExecutionState<'a> {
@@ -223,7 +224,11 @@ pub fn startup(
     let mut registry = Vec::new();
     let (builtins, builtin_data) = builtins::get_builtins(&mut registry);
 
-    let ExecContext { resolve, stream } = ctx;
+    let ExecContext {
+        resolve,
+        stream,
+        interrupt,
+    } = ctx;
     let mut resolved_imports = Vec::<(Vec<String>, ObjectPtr)>::new();
     // TODO: This shouldn't use a path buf at this point
     let mut resolve_stack = vec![(
@@ -270,6 +275,7 @@ pub fn startup(
         builtin_data,
         registry,
         stream: stream.into(),
+        interrupt,
     };
 
     let rstate = RefCell::new(state);
@@ -292,6 +298,10 @@ pub fn execute<'a>(st: ExecStateRef<'a>) -> ExecuteReturn {
         let native_fn_call: (NativeFn, Vec<Value>, Option<Value>);
         loop {
             let mut state = st.borrow_mut();
+            if let Some(interrupt_fn) = state.interrupt.take() {
+                interrupt_fn(&mut state);
+                state.interrupt = Some(interrupt_fn);
+            }
             {
                 let current_idx = state.current_frame.index;
 

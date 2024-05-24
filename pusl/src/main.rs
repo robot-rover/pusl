@@ -1,36 +1,43 @@
-extern crate bincode;
-extern crate byteorder;
-extern crate pusl_lang;
-extern crate serde;
-extern crate shrust;
-
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use clap::{App, Arg, SubCommand};
 use pusl_lang::backend::{
     execute,
     linearize::{linearize_file, ByteCodeFile},
-    startup, ExecContext,
+    startup, ExecContext, debug,
 };
 use pusl_lang::lexer::lex;
 use pusl_lang::parser::parse;
-use std::fs::File;
 use std::io;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
+use std::{fs::File, io::Seek};
 
 const MAJOR_VERSION: u16 = 1; // Bytecode to run must match
 const MINOR_VERSION: u16 = 1; // Ok to run bytecode where bytecode minor version < interpreter minor version
 
 const MAGIC_NUMBER: &[u8] = "pusl".as_bytes();
 
-fn compile_from_source_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCodeFile> {
+fn open_code_or_source(path: &PathBuf, verbosity: u64) -> io::Result<(impl io::BufRead, [u8; 4])> {
     if verbosity >= 1 {
         println!("Using input file: {}", path.display());
     }
-    let input_file = File::open(path)?;
-    let lines = BufReader::new(input_file)
-        .lines()
-        .collect::<Result<Vec<String>, _>>()?;
+    let input_file = File::open(&path)?;
+    let mut reader = BufReader::new(input_file);
+    let mut magic_number = [0u8; 4];
+    reader.read_exact(&mut magic_number)?;
+    reader.seek(io::SeekFrom::Start(0))?;
+    Ok((reader, magic_number))
+}
+
+fn compile_from_source(
+    path: &PathBuf,
+    reader: impl BufRead,
+    verbosity: u64,
+) -> io::Result<ByteCodeFile> {
+    if verbosity >= 1 {
+        println!("Using input file: {}", path.display());
+    }
+    let lines = reader.lines().collect::<Result<Vec<String>, _>>()?;
     let tokens = lex(lines.iter().map(|str| str.as_str()));
     let ast = parse(tokens);
     let base_func = linearize_file(ast);
@@ -57,12 +64,15 @@ fn write_to_code_path(path: &PathBuf, base_func: &ByteCodeFile, verbosity: u64) 
     Ok(())
 }
 
-fn load_code_from_path(path: &PathBuf, verbosity: u64) -> io::Result<ByteCodeFile> {
+fn load_code_from_path(
+    path: &PathBuf,
+    mut reader: impl BufRead,
+    verbosity: u64,
+) -> io::Result<ByteCodeFile> {
     if verbosity >= 1 {
         println!("Using input file: {}", path.display());
     }
-    let input_file = File::open(&path)?;
-    let mut reader = BufReader::new(input_file);
+
     let mut magic_number = [0u8; 4];
     reader.read_exact(&mut magic_number)?;
     assert_eq!(magic_number, MAGIC_NUMBER, "Bytecode is corrupt");
@@ -112,10 +122,10 @@ fn main() -> io::Result<()> {
         )
         .subcommand(
             SubCommand::with_name("run")
-                .about("execute a compiled \".puslc\" bytecode file")
+                .about("execute a \".pusl\" source file or a compiled \".puslc\" bytecode file")
                 .arg(
-                    Arg::with_name("CODE")
-                        .help("path to the bytecode file")
+                    Arg::with_name("PATH")
+                        .help("path to the file")
                         .required(true)
                         .index(1),
                 )
@@ -127,15 +137,15 @@ fn main() -> io::Result<()> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("interpret")
-                .about("interpret a \".pusl\" source file")
+            SubCommand::with_name("debug")
+                .about("execute a \".pusl\" source file or a compiled \".puslc.\" bytecode file with the pusl debugger")
                 .arg(
-                    Arg::with_name("SOURCE")
-                        .help("path to the source file")
+                    Arg::with_name("PATH")
+                        .help("path to the file")
                         .required(true)
                         .index(1),
-                ),
-        )
+                    ),
+                )
         .get_matches();
 
     let verbosity = matches.occurrences_of("v");
@@ -144,7 +154,8 @@ fn main() -> io::Result<()> {
         ("compile", Some(matches)) => {
             let mut path = PathBuf::from(matches.value_of("SOURCE").unwrap());
 
-            let bcf = compile_from_source_path(&path, verbosity)?;
+            let (reader, _magic) = open_code_or_source(&path, verbosity)?;
+            let bcf = compile_from_source(&path, reader, verbosity)?;
             if matches.is_present("analyze") {
                 println!("{:#?}", bcf.base_func);
             } else {
@@ -153,9 +164,14 @@ fn main() -> io::Result<()> {
             }
         }
         ("run", Some(matches)) => {
-            let path = PathBuf::from(matches.value_of("CODE").unwrap());
+            let path = PathBuf::from(matches.value_of("PATH").unwrap());
 
-            let bcf = load_code_from_path(&path, verbosity)?;
+            let (reader, magic) = open_code_or_source(&path, verbosity)?;
+            let bcf = if magic == MAGIC_NUMBER {
+                load_code_from_path(&path, reader, verbosity)?
+            } else {
+                compile_from_source(&path, reader, verbosity)?
+            };
             if matches.is_present("analyze") {
                 println!("{:#?}", bcf.base_func);
             } else {
@@ -164,13 +180,24 @@ fn main() -> io::Result<()> {
                 execute(&mut state);
             }
         }
-        ("interpret", Some(matches)) => {
-            let path = PathBuf::from(matches.value_of("SOURCE").unwrap());
+        ("debug", Some(matches)) => {
+            let path = PathBuf::from(matches.value_of("PATH").unwrap());
 
-            let bcf = compile_from_source_path(&path, verbosity)?;
-            let ctx = ExecContext::default();
-            let mut state = startup(bcf, path, ctx);
-            execute(&mut state);
+            let (reader, magic) = open_code_or_source(&path, verbosity)?;
+            let bcf = if magic == MAGIC_NUMBER {
+                load_code_from_path(&path, reader, verbosity)?
+            } else {
+                compile_from_source(&path, reader, verbosity)?
+            };
+            if matches.is_present("analyze") {
+                println!("{:#?}", bcf.base_func);
+            } else {
+                let mut ctx = ExecContext::default();
+                let mut interrupt = debug::make_interrupt();
+                ctx.interrupt = Some(&mut interrupt);
+                let mut state = startup(bcf, path, ctx);
+                execute(&mut state);
+            }
         }
         _ => println!("{}", matches.usage()),
     }

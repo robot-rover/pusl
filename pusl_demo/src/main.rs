@@ -41,10 +41,8 @@ fn main() {
     let roots = lex(lines);
     let ast = parse(roots);
     let code = linearize_file(ast);
-    let ctx = ExecContext {
-        resolve: test_resolve,
-        stream: None,
-    };
+    let mut ctx = ExecContext::default();
+    ctx.resolve = test_resolve;
     let (command_channel_send, command_channel_recv) = mpsc::channel::<DebugCommand>();
     let (response_channel_send, response_channel_recv) = mpsc::channel::<DebugResponse>();
     let cli_channels = (command_channel_send, response_channel_recv);
