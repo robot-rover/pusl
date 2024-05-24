@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::str::FromStr;
 
 use logos::{Lexer, Logos, Span};
 
@@ -162,7 +163,16 @@ pub enum Token {
     #[regex(r#""([^"]|(\\")|\n)*""#, |lex| escape_str(trim_str(lex.slice(), 1, 1)))]
     #[regex(r#"@"([^"]|\n)*""#, |lex| trim_str(lex.slice(), 2, 1).to_string())]
     String(String),
+    // TODO: Error Handling for invalid digits
+    #[regex(r"\d+", |lex| i64::from_str(lex.slice()).ok())]
+    #[regex(r"0\d+", |lex| i64::from_str_radix(&lex.slice()[1..], 8).ok())]
+    #[regex(r"0x[0-9a-fA-F]+", |lex| i64::from_str_radix(&lex.slice()[2..], 16).ok())]
+    // Todo: handle too long
+    #[regex(r"'.'", |lex| lex.slice().chars().nth(1).map(|c| c as i64))]
     Integer(i64),
+    // Todo: handle missing number after decimal point
+    #[regex(r"\d+\.\d*", |lex| f64::from_str(lex.slice()).ok())]
+    #[regex(r"\d+(\.\d*)?e[+-]?\d*", |lex| parse_sci(lex.slice()).ok())]
     Number(f64),
     #[token("true", |_| true)]
     #[token("false", |_| false)]
@@ -170,6 +180,9 @@ pub enum Token {
     #[token("null")]
     Null,
     // Comments
+    #[regex(r"//[^\n]*", |lex| lex.slice()[2..].to_string())]
+    #[regex(r"#[^\n]*", |lex| lex.slice()[1..].to_string())]
+    #[regex(r"/\*([^*]|\n|\*[^/])*\*/", |lex| trim_str(lex.slice(), 2, 2).to_string())]
     Comment(String),
 }
 
@@ -200,4 +213,14 @@ fn escape_str(s: &str) -> Result<String, ()> {
         .map(|res| res.map(|part| part.into()))
         .collect::<Result<Vec<Cow<str>>, _>>()
         .map(|v| v.join(""))
+}
+
+fn parse_sci(s: &str) -> Result<f64, ()> {
+    // TODO: Error handling
+    let e_loc = s.find('e').unwrap();
+    let (base, exp) = s.split_at(e_loc);
+    let base = f64::from_str(base).map_err(|_| ())?;
+    // Skip the 'e'
+    let exp = i32::from_str(&exp[1..]).map_err(|_| ())?;
+    Ok(base * 10f64.powi(exp))
 }
