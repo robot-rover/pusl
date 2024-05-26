@@ -66,7 +66,7 @@ pub enum Statement {
         index_id: Ident,
         value_id: Ident,
         iterable: Expr,
-        body: StateRef
+        body: StateRef,
     },
     Break,
     Continue,
@@ -77,6 +77,7 @@ pub enum Statement {
     Throw(Expr),
     Const(Ident, Literal),
     // TODO Enum
+    Empty,
 }
 
 pub type ExprRef = Box<Expr>;

@@ -1,13 +1,15 @@
-use std::{borrow::Cow, num::ParseIntError};
 use std::str::FromStr;
+use std::{borrow::Cow};
 
-use logos::{Lexer, Logos, Span};
+use logos::{Lexer, Logos, Skip, Span};
 
-use super::context::{LexerContext, LexerError, LexerResult};
+use crate::context::{ContextSpan, ErrorContext};
+
+use self::error::{LexError, LexResult};
 
 #[derive(Debug, PartialEq, Logos)]
 #[logos(extras = LexerContext)]
-#[logos(error = LexerError)]
+#[logos(error = LexError)]
 #[logos(skip r"[ \t\r\f]+")]
 pub enum Token {
     // Keywords
@@ -168,9 +170,7 @@ pub enum Token {
     #[token("?")]
     QuestionMark,
     #[token("\n", |lex| {
-        let span = lex.span();
-        debug_assert_eq!(span.start + 1, span.end, "Newline token should be a single character");
-        lex.extras.log_newline(span.start);
+        lex.extras.log_newlines(1);
     })]
     Newline,
     #[token("@")]
@@ -201,10 +201,20 @@ pub enum Token {
     #[token("null")]
     Null,
     // Comments
-    #[regex(r"//[^\n]*", |lex| lex.slice()[2..].to_string())]
-    #[regex(r"#[^\n]*", |lex| lex.slice()[1..].to_string())]
-    #[regex(r"/\*([^*]|\n|\*[^/])*\*/", |lex| trim_str(find_newlines(lex), 2, 2).to_string())]
-    Comment(String),
+    #[regex(r"//[^\n]*", |lex| {
+        let _content = &lex.slice()[2..];
+        Skip
+    }
+    )]
+    #[regex(r"#[^\n]*", |lex| {
+        let _content = &lex.slice()[1..];
+        Skip
+    })]
+    #[regex(r"/\*([^*]|\n|\*[^/])*\*/", |lex| {
+        let _content = trim_str(find_newlines(lex), 2, 2);
+        Skip
+    })]
+    Comment,
 }
 
 #[derive(Debug, PartialEq, Logos)]
@@ -239,13 +249,18 @@ fn escape_lookup(s: &str) -> Option<String> {
     }
 }
 
-fn escape_str<'s>(source: &'s str) -> LexerResult<String> {
+fn escape_str<'s>(source: &'s str) -> LexResult<String> {
     let mut escape_lexer = EscapedString::lexer(source);
     let mut fragments: Vec<Cow<_>> = Vec::new();
     while let Some(token) = escape_lexer.next() {
         match token {
             Ok(fragment) => fragments.push(fragment.into()),
-            Err(_) => return Err(LexerError::General(format!("Illegal escape sequence in string: \"{}\"", escape_lexer.slice()))),
+            Err(_) => {
+                return Err(LexError::General(format!(
+                    "Illegal escape sequence in string: \"{}\"",
+                    escape_lexer.slice()
+                )))
+            }
         }
     }
     Ok(fragments.join(""))
@@ -254,12 +269,13 @@ fn escape_str<'s>(source: &'s str) -> LexerResult<String> {
 // TODO: This would be faster if it is rolled into the escaping logic for strings
 fn find_newlines<'s>(lexer: &mut Lexer<'s, Token>) -> &'s str {
     let slice = lexer.slice();
-    let span_begin = lexer.span().start;
-    slice.char_indices().filter(|&(_, c)| c == '\n').for_each(|(idx, _)| lexer.extras.log_newline(span_begin + idx));
+    lexer
+        .extras
+        .log_newlines(slice.chars().filter(|&c| c == '\n').count() as u32);
     slice
 }
 
-fn parse_sci<'s>(lexer: &Lexer<'s, Token>) -> LexerResult<f64> {
+fn parse_sci<'s>(lexer: &Lexer<'s, Token>) -> LexResult<f64> {
     // TODO: Error handling
     let s = lexer.slice();
     let e_loc = s.find('e').unwrap();
@@ -270,108 +286,263 @@ fn parse_sci<'s>(lexer: &Lexer<'s, Token>) -> LexerResult<f64> {
     Ok(base * 10f64.powi(exp))
 }
 
-pub fn lex(input: &str) -> Lexer<Token> {
-    Token::lexer(input)
+pub struct SpannedLexer<'s> {
+    file_name: String,
+    logos: logos::Lexer<'s, Token>,
+    stored_next: Option<<Self as Iterator>::Item>,
+}
+
+impl<'s> SpannedLexer<'s> {
+    pub fn new(input: &'s str, file_name: String) -> Self {
+        Self {
+            logos: Token::lexer(input),
+            file_name,
+            stored_next: None,
+        }
+    }
+
+    pub fn get_file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    pub fn get_source(&self) -> &str {
+        &self.logos.source()
+    }
+
+    pub fn current_line(&self) -> u32 {
+        self.logos.extras.get_line()
+    }
+
+    pub fn current_offset(&self) -> usize {
+        self.logos.span().end
+    }
+}
+
+impl SpannedLexer<'_> {
+    fn next_internal(&mut self) -> Option<<Self as Iterator>::Item> {
+        let token = self.logos.next()?;
+        Some(
+            token
+                .map(|tok| {
+                    (
+                        tok,
+                        ContextSpan::new(self.logos.span(), self.logos.extras.get_line()),
+                    )
+                })
+                .map_err(|err| err.with_context(&self.logos, self.file_name.clone())),
+        )
+    }
+
+    pub fn peek(&mut self) -> Option<&<Self as Iterator>::Item> {
+        if self.stored_next.is_none() {
+            self.stored_next = self.next_internal();
+        }
+        self.stored_next.as_ref()
+    }
+
+    pub fn has_next(&mut self) -> bool {
+        self.peek().is_some()
+    }
+}
+
+impl Iterator for SpannedLexer<'_> {
+    type Item = Result<(Token, ContextSpan), ErrorContext>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next) = self.stored_next.take() {
+            Some(next)
+        } else {
+            self.next_internal()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct LexerContext {
+    line_num: u32,
+}
+
+impl Default for LexerContext {
+    fn default() -> Self {
+        Self { line_num: 1 }
+    }
+}
+
+impl LexerContext {
+    pub fn get_line(&self) -> u32 {
+        self.line_num
+    }
+}
+
+impl LexerContext {
+    pub fn log_newlines(&mut self, count: u32) {
+        self.line_num += count;
+    }
+}
+
+mod error {
+    use std::num::{ParseFloatError, ParseIntError};
+
+    use logos::Lexer;
+
+    use crate::context::ErrorContext;
+
+    use super::Token;
+
+    pub type LexResult<T> = Result<T, LexError>;
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum LexError {
+        ParseIntError(ParseIntError),
+        ParseFloatError(ParseFloatError),
+        UnknownToken,
+        General(String),
+    }
+
+    impl Default for LexError {
+        fn default() -> Self {
+            LexError::UnknownToken
+        }
+    }
+
+    impl LexError {
+        pub fn with_context<'s>(self, lexer: &Lexer<'s, Token>, file_name: String) -> ErrorContext {
+            let token_location = lexer.span();
+            let source = lexer.source();
+            let message = match self {
+                LexError::ParseIntError(err) => {
+                    format!("Failed to parse integer literal: {}", err)
+                }
+                LexError::ParseFloatError(err) => {
+                    format!("Failed to parse float literal: {}", err)
+                }
+                LexError::UnknownToken => "Unknown token".to_string(),
+                LexError::General(msg) => msg,
+            };
+            ErrorContext::new(
+                file_name,
+                lexer.extras.line_num,
+                source,
+                token_location,
+                message,
+            )
+        }
+    }
+
+    impl From<ParseIntError> for LexError {
+        fn from(err: ParseIntError) -> Self {
+            LexError::ParseIntError(err)
+        }
+    }
+
+    impl From<ParseFloatError> for LexError {
+        fn from(err: ParseFloatError) -> Self {
+            LexError::ParseFloatError(err)
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::error::LexResult;
+
     use super::*;
     use std::fs;
+
+    fn lex(input: &str) -> Vec<Result<Token, LexError>> {
+        Lexer::new(input).collect()
+    }
 
     #[test]
     fn single_token_test() {
         println!("Checking Basic Tokens");
-        let result = lex("base").collect::<Vec<_>>();
+        let result = lex("base");
         assert_eq!(vec![Ok(Token::Base)], result);
 
-        let result = lex("true").collect::<Vec<_>>();
+        let result = lex("true");
         assert_eq!(vec![Ok(Token::Boolean(true))], result);
 
         // Strings
         println!("Checking Strings");
-        let result = lex(r#""Hello World""#)
-            .collect::<Vec<_>>();
+        let result = lex(r#""Hello World""#);
         assert_eq!(vec![Ok(Token::String("Hello World".into()))], result);
 
         println!("Checking String Escapes");
-        let result = lex(r#""Hello\"World""#)
-            .collect::<Vec<_>>();
+        let result = lex(r#""Hello\"World""#);
         assert_eq!(vec![Ok(Token::String(r#"Hello"World"#.into()))], result);
 
-        let result = lex(r#""Hello\nWorld""#)
-            .collect::<Vec<_>>();
+        let result = lex(r#""Hello\nWorld""#);
         assert_eq!(vec![Ok(Token::String("Hello\nWorld".into()))], result);
 
         // TODO: This should error when its not a verbatim string
-        let result = lex("\"Hello\nWorld\"")
-            .collect::<Vec<_>>();
+        let result = lex("\"Hello\nWorld\"");
         assert_eq!(vec![Ok(Token::String("Hello\nWorld".into()))], result);
 
         println!("Checking Verbatim Strings");
-        let result = lex("@\"Hello\\nWorld\nNewline\"")
-            .collect::<Vec<_>>();
-        assert_eq!(vec![Ok(Token::String("Hello\\nWorld\nNewline".into()))], result);
+        let result = lex("@\"Hello\\nWorld\nNewline\"");
+        assert_eq!(
+            vec![Ok(Token::String("Hello\\nWorld\nNewline".into()))],
+            result
+        );
 
         println!("Checking Comments");
-        let result = lex("// This is a comment")
-            .collect::<Vec<_>>();
-        assert_eq!(vec![Ok(Token::Comment(" This is a comment".into()))], result);
+        let result = lex("// This is a comment");
+        assert_eq!(
+            Vec::<LexResult<Token>>::new(),
+            result
+        );
 
-        let result = lex("# This is a comment")
-            .collect::<Vec<_>>();
-        assert_eq!(vec![Ok(Token::Comment(" This is a comment".into()))], result);
+        let result = lex("# This is a comment");
+        assert_eq!(
+            Vec::<LexResult<Token>>::new(),
+            result
+        );
 
-        let result = lex("  /* This is a\n\n comment */  ")
-            .collect::<Vec<_>>();
-        assert_eq!(vec![Ok(Token::Comment(" This is a\n\n comment ".into()))], result);
+        let result = lex("  /* This is a\n\n comment */  ");
+        assert_eq!(
+            Vec::<LexResult<Token>>::new(),
+            result
+        );
 
         println!("Checkint Integer Literals");
-        let result = lex("123")
-            .collect::<Vec<_>>();
+        let result = lex("123");
         assert_eq!(vec![Ok(Token::Integer(123))], result);
 
-        let result = lex("0123")
-            .collect::<Vec<_>>();
-        assert_eq!(vec![Ok(Token::Integer(1*8*8 + 2*8 + 3))], result);
+        let result = lex("0123");
+        assert_eq!(vec![Ok(Token::Integer(1 * 8 * 8 + 2 * 8 + 3))], result);
 
-        let result = lex("0x123")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Integer(0x123)]), result);
+        let result = lex("0x123");
+        assert_eq!(vec![Ok(Token::Integer(0x123))], result);
 
-        let result = lex("'a'")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Integer(97)]), result);
+        let result = lex("'a'");
+        assert_eq!(vec![Ok(Token::Integer(97))], result);
 
         println!("Checking Float Literals");
-        let result = lex("7.")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Number(7.)]), result);
+        let result = lex("7.");
+        assert_eq!(vec![Ok(Token::Number(7.))], result);
 
-        let result = lex("4.0")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Number(4.)]), result);
+        let result = lex("4.0");
+        assert_eq!(vec![Ok(Token::Number(4.))], result);
 
-        let result = lex("4.e2")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Number(4e2)]), result);
+        let result = lex("4.e2");
+        assert_eq!(vec![Ok(Token::Number(4e2))], result);
 
-        let result = lex("4.e-2")
-            .collect::<LexerResult<Vec<_>>>();
-        assert_eq!(Ok(vec![Token::Number(4e-2)]), result);
+        let result = lex("4.e-2");
+        assert_eq!(vec![Ok(Token::Number(4e-2))], result);
     }
 
     #[test]
     fn squirrel_sample_test() {
-        for file in fs::read_dir("../squirrel/samples/").expect("Unable to find squirrel samples directory") {
+        for file in
+            fs::read_dir("../squirrel/samples/").expect("Unable to find squirrel samples directory")
+        {
             let file = file.expect("Unable to read squirrel samples directory");
             let path = file.path();
             let contents = fs::read_to_string(&path).unwrap();
-            let mut lexer = lex(&contents);
-            let tokens = lexer.by_ref().collect::<LexerResult<Vec<_>>>();
+            let tokens = SpannedLexer::new(&contents, path.to_string_lossy().to_string())
+                .collect::<Result<Vec<_>, _>>();
             match tokens {
-                Ok(tokens) => {},
-                Err(e) => panic!("{:#}", e.with_context(&lexer, path.to_string_lossy().to_string())),
+                Ok(tokens) => {}
+                Err(e) => panic!("{:#}", e),
             }
 
             // TODO: Do something with tokens
