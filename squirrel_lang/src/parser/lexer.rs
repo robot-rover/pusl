@@ -343,6 +343,12 @@ impl SpannedLexer<'_> {
     pub fn has_next(&mut self) -> bool {
         self.peek().is_some()
     }
+
+    pub fn skip_newlines(&mut self) {
+        while let Some(Ok((Token::Newline, _))) = self.peek() {
+            self.next();
+        }
+    }
 }
 
 impl Iterator for SpannedLexer<'_> {
@@ -381,7 +387,7 @@ impl LexerContext {
 }
 
 mod error {
-    use std::num::{ParseFloatError, ParseIntError};
+    use std::{backtrace::Backtrace, num::{ParseFloatError, ParseIntError}};
 
     use logos::Lexer;
 
@@ -424,6 +430,7 @@ mod error {
                 source,
                 token_location,
                 message,
+                Backtrace::capture(),
             )
         }
     }

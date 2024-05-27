@@ -45,7 +45,7 @@ fn parse_statement<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Statement> 
     let (initial_token, ctx) = if let Some(next) = tokens.next() {
         next?
     } else {
-        return Err(ParseError::UnexpectedEof);
+        return Err(ParseError::unexpected_eof());
     };
     match initial_token {
         Token::LeftCurlyBrace => Ok(Statement::Block(parse_statements(
@@ -53,19 +53,22 @@ fn parse_statement<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Statement> 
             Some(Token::RightCurlyBrace),
         )?)),
         Token::Newline | Token::Semicolon => Ok(Statement::Empty),
-        other => Err(ParseError::UnexpectedToken(other, ctx)),
+        Token::Class => parse_class(tokens),
+        other => Err(ParseError::unexpected_token(other, ctx)),
     }
 }
 
 fn parse_class<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Statement> {
-    let (mut first_token, mut ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    tokens.skip_newlines();
+    let (mut first_token, mut ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
     let mut ident = None;
     if let Token::Identifier(name) = first_token {
         ident = Some(name);
-        (first_token, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+        tokens.skip_newlines();
+        (first_token, ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
     }
     if first_token != Token::LeftCurlyBrace {
-        return Err(ParseError::UnexpectedToken(first_token, ctx));
+        return Err(ParseError::unexpected_token(first_token, ctx));
     }
     let body = parse_class_body(tokens)?;
     let expr = match ident {
@@ -79,7 +82,7 @@ fn parse_class_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
     let mut constructor = None;
     let mut members = Vec::new();
     loop {
-        let next = tokens.peek().ok_or(error::ParseError::UnexpectedEof)?;
+        let next = tokens.peek().ok_or_else(error::ParseError::unexpected_eof)?;
         match next {
             Ok((Token::RightCurlyBrace, _)) => {
                 tokens.next();
@@ -93,7 +96,10 @@ fn parse_class_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
                 let (name, func) = parse_function(tokens)?;
                 members.push((Expr::Literal(Literal::String(name)), Expr::FunctionDef(func)));
             },
-            other => {
+            Ok((Token::Newline, _)) => {
+                tokens.next();
+            },
+            _ => {
                 members.push(parse_table_slot(tokens)?);
             }
         }
@@ -104,26 +110,26 @@ fn parse_class_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
 }
 
 fn parse_table_slot<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<(Expr, Expr)> {
-    let (init_token, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    let (init_token, ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
     match init_token {
         Token::Identifier(name) => {
-            let (next, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+            let (next, ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
             if next != Token::Assign {
-                return Err(ParseError::UnexpectedToken(next, ctx));
+                return Err(ParseError::unexpected_token(next, ctx));
             }
             let value = parse_expr(tokens)?;
             Ok((Expr::Literal(Literal::String(name)), value))
         },
         Token::LeftSquareBracket => {
             let key = parse_expr(tokens)?;
-            let (next, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+            let (next, ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
             if next != Token::Assign {
-                return Err(ParseError::UnexpectedToken(next, ctx));
+                return Err(ParseError::unexpected_token(next, ctx));
             }
             let value = parse_expr(tokens)?;
             Ok((key, value))
         },
-        other => Err(ParseError::UnexpectedToken(other, ctx)),
+        other => Err(ParseError::unexpected_token(other, ctx)),
     }
 }
 
@@ -132,10 +138,10 @@ fn parse_expr<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
 }
 
 fn parse_function<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<(String, Function)> {
-    let (name_tok, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    let (name_tok, ctx) = tokens.next().ok_or_else(ParseError::unexpected_eof)??;
     let name = match name_tok {
         Token::Identifier(name) => name,
-        other => return Err(ParseError::UnexpectedToken(other, ctx)),
+        other => return Err(ParseError::unexpected_token(other, ctx)),
     };
     Ok((name, parse_function_args_body(tokens)?))
 }
@@ -145,6 +151,8 @@ fn parse_function_args_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Fu
 }
 
 mod error {
+    use std::backtrace::Backtrace;
+
     use logos::Span;
 
     use crate::context::{ContextSpan, ErrorContext};
@@ -152,9 +160,10 @@ mod error {
     use super::lexer::{SpannedLexer, Token};
 
     pub type ParseResult<T> = Result<T, ParseError>;
+    #[derive(Debug)]
     pub enum ParseError {
-        UnexpectedToken(Token, ContextSpan),
-        UnexpectedEof,
+        UnexpectedToken(Token, ContextSpan, Backtrace),
+        UnexpectedEof(Backtrace),
         ErrorContext(ErrorContext),
     }
 
@@ -167,14 +176,15 @@ mod error {
     impl ParseError {
         pub fn with_context(self, ctx: &SpannedLexer) -> ErrorContext {
             match self {
-                ParseError::UnexpectedToken(tok, span) => ErrorContext::new(
+                ParseError::UnexpectedToken(tok, span, backtrace) => ErrorContext::new(
                     ctx.get_file_name().to_string(),
                     span.end_line,
                     ctx.get_source(),
                     span.into(),
                     format!("Unexpected token {:?}", tok),
+                    backtrace,
                 ),
-                ParseError::UnexpectedEof => ErrorContext::new(
+                ParseError::UnexpectedEof(backtrace) => ErrorContext::new(
                     ctx.get_file_name().to_string(),
                     ctx.current_line(),
                     ctx.get_source(),
@@ -183,9 +193,18 @@ mod error {
                         end: ctx.current_offset(),
                     },
                     format!("Unexpected eof"),
+                    backtrace,
                 ),
                 ParseError::ErrorContext(err) => err,
             }
+        }
+
+        pub fn unexpected_token(tok: Token, span: ContextSpan) -> Self {
+            Self::UnexpectedToken(tok, span, Backtrace::capture())
+        }
+
+        pub fn unexpected_eof() -> Self {
+            Self::UnexpectedEof(Backtrace::capture())
         }
     }
 }

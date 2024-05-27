@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{backtrace::{Backtrace, BacktraceStatus}, error::Error, fmt};
 
 use logos::Span;
 
@@ -28,13 +28,14 @@ impl Into<Span> for ContextSpan {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub struct ErrorContext {
     pub file_name: String,
     pub line_num: u32,
     pub line_content: String,
     pub token_location: Span,
     pub message: String,
+    pub backtrace: Backtrace,
 }
 
 impl ErrorContext {
@@ -44,6 +45,7 @@ impl ErrorContext {
         source: &str,
         token_location: Span,
         message: String,
+        backtrace: Backtrace,
     ) -> Self {
         let start_pos = source[..token_location.start]
             .rfind('\n')
@@ -64,9 +66,12 @@ impl ErrorContext {
                 end: token_location.end - start_pos,
             },
             message,
+            backtrace,
         }
     }
 }
+
+impl Error for ErrorContext {}
 
 struct ConsoleContext {
     line_num: String,
@@ -117,6 +122,11 @@ impl fmt::Display for ErrorContext {
             let mut lines = vec![ConsoleContext::new(current_line)];
             for (idx, c) in self.line_content.char_indices() {
                 if c == '\n' {
+                    // Handle targeting the newline
+                    if idx == self.token_location.start && idx +1 == self.token_location.end {
+                        lines.last_mut().unwrap().add_char('\\', true);
+                        lines.last_mut().unwrap().add_char('n', true);
+                    }
                     current_line += 1;
                     lines.push(ConsoleContext::new(current_line));
                 } else {
@@ -134,6 +144,9 @@ impl fmt::Display for ErrorContext {
                 line.format(f, line_num_width)?;
             }
             writeln!(f, "{}", self.message)?;
+            if matches!(self.backtrace.status(), BacktraceStatus::Captured) {
+                writeln!(f, "{}", self.backtrace)?;
+            }
         } else {
             writeln!(f, "{}:{} {}", self.file_name, self.line_num, self.message)?;
         }
