@@ -9,7 +9,7 @@ use logos::Span;
 use serde::de::Unexpected;
 
 use self::{
-    ast::Statement,
+    ast::{Expr, Function, Literal, Statement},
     error::{ParseError, ParseResult},
     lexer::SpannedLexer,
 };
@@ -55,6 +55,93 @@ fn parse_statement<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Statement> 
         Token::Newline | Token::Semicolon => Ok(Statement::Empty),
         other => Err(ParseError::UnexpectedToken(other, ctx)),
     }
+}
+
+fn parse_class<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Statement> {
+    let (mut first_token, mut ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    let mut ident = None;
+    if let Token::Identifier(name) = first_token {
+        ident = Some(name);
+        (first_token, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    }
+    if first_token != Token::LeftCurlyBrace {
+        return Err(ParseError::UnexpectedToken(first_token, ctx));
+    }
+    let body = parse_class_body(tokens)?;
+    let expr = match ident {
+        Some(ident) => Expr::NewSlot(ident, Box::new(body)),
+        None => body,
+    };
+    Ok(Statement::Expr(expr))
+}
+
+fn parse_class_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
+    let mut constructor = None;
+    let mut members = Vec::new();
+    loop {
+        let next = tokens.peek().ok_or(error::ParseError::UnexpectedEof)?;
+        match next {
+            Ok((Token::RightCurlyBrace, _)) => {
+                tokens.next();
+                break;
+            },
+            Ok((Token::Constructor, _)) => {
+                tokens.next();
+                constructor = Some(parse_function_args_body(tokens)?);
+            },
+            Ok((Token::Function, _)) => {
+                let (name, func) = parse_function(tokens)?;
+                members.push((Expr::Literal(Literal::String(name)), Expr::FunctionDef(func)));
+            },
+            other => {
+                members.push(parse_table_slot(tokens)?);
+            }
+        }
+    }
+    Ok(Expr::ClassDef {
+        constructor, members
+    })
+}
+
+fn parse_table_slot<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<(Expr, Expr)> {
+    let (init_token, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    match init_token {
+        Token::Identifier(name) => {
+            let (next, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+            if next != Token::Assign {
+                return Err(ParseError::UnexpectedToken(next, ctx));
+            }
+            let value = parse_expr(tokens)?;
+            Ok((Expr::Literal(Literal::String(name)), value))
+        },
+        Token::LeftSquareBracket => {
+            let key = parse_expr(tokens)?;
+            let (next, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+            if next != Token::Assign {
+                return Err(ParseError::UnexpectedToken(next, ctx));
+            }
+            let value = parse_expr(tokens)?;
+            Ok((key, value))
+        },
+        other => Err(ParseError::UnexpectedToken(other, ctx)),
+    }
+}
+
+fn parse_expr<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Expr> {
+    todo!()
+}
+
+fn parse_function<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<(String, Function)> {
+    let (name_tok, ctx) = tokens.next().ok_or(ParseError::UnexpectedEof)??;
+    let name = match name_tok {
+        Token::Identifier(name) => name,
+        other => return Err(ParseError::UnexpectedToken(other, ctx)),
+    };
+    Ok((name, parse_function_args_body(tokens)?))
+}
+
+fn parse_function_args_body<'s>(tokens: &mut SpannedLexer<'s>) -> ParseResult<Function> {
+    todo!()
 }
 
 mod error {

@@ -87,7 +87,7 @@ pub enum Expr {
     ArrayDecl(Vec<Expr>),
     FunctionDef(Function),
     ClassDef {
-        constructor: Function,
+        constructor: Option<Function>,
         members: Vec<(Expr, Expr)>,
     },
     Assign(Ident, ExprRef),
